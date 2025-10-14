@@ -13,20 +13,5 @@ class Nutricionista(val idNutri: String = UUID.randomUUID().toString(),
         TODO()
     }
 
-    fun bloquearHorario(){
-        TODO()
-    }
-
-    fun liberarHorario(){
-        TODO()
-    }
-
-    fun agendarConsulta(nomePaciente:String,
-                        emailPaciente:String,
-                        dataHora: LocalDateTime,
-                        valor:Double,
-                        isAvulso:Boolean = true){
-        TODO()
-    }
 
 }
