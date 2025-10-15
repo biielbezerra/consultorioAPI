@@ -5,8 +5,6 @@ import java.time.LocalDateTime
 
 class ConsultaService {
 
-    fun reagendarConsulta(consulta: Consulta, novaData: LocalDateTime){
-        TODO()
-    }
+
 
 }

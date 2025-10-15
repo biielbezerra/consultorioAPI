@@ -13,15 +13,6 @@ data class Consulta(val idConsulta: String = UUID.randomUUID().toString(),
                          var descontoPercentual: Double = 0.0,
                          var isAvulso: Boolean = false) {
 
-
-    fun aplicarDescontoManual() {
-        valorConsulta *= (1 - descontoPercentual / 100)
-    }
-
-    fun cancelarConsulta(){
-        TODO()
-    }
-
 }
 
 enum class StatusConsulta {
