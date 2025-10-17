@@ -7,8 +7,7 @@ data class Paciente(
     val idPaciente: String = UUID.randomUUID().toString(),
     val nomePaciente: String,
     var email: String,
-    var senha: String,
-    val agenda: Agenda
+    var senha: String
 ) {
     var dataCadastro: LocalDateTime? = null
     val consultasPaciente = mutableListOf<Consulta>()

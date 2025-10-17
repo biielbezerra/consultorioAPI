@@ -20,6 +20,12 @@ data class Consulta(
     var isAvulso: Boolean = false,
     var duracao: Duration = Duration.ofMinutes(60)
 ) {
+
+    fun aplicarDesconto(desconto: Double) {
+        this.descontoPercentual = desconto
+        this.valorConsulta = this.valorBase * (1 - desconto / 100)
+    }
+
     fun horarioFim(): LocalDateTime {
         return dataHoraConsulta.plus(duracao)
     }

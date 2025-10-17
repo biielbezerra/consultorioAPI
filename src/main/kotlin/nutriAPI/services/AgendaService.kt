@@ -1,8 +1,10 @@
 package com.nutriAPI.services
 
 import com.nutriAPI.models.Agenda
+import com.nutriAPI.models.Consulta
 import com.nutriAPI.models.Profissional
 import java.time.LocalDateTime
+import java.time.Duration
 
 class AgendaService {
 
@@ -14,11 +16,6 @@ class AgendaService {
         agenda.horariosDisponiveis.remove(horario)
     }
 
-    fun bloquearHorario(agenda: Agenda, horario: LocalDateTime) {
-        if (agenda.horariosDisponiveis.contains(horario)) {
-            agenda.horariosBloqueados.add(horario)
-        }
-    }
 
     fun liberarHorario(agenda: Agenda, horario: LocalDateTime) {
         agenda.horariosBloqueados.remove(horario)

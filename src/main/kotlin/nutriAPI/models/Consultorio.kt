@@ -34,28 +34,22 @@ class Consultorio(
     }
 
     fun adicionarNutri(nome: String, email: String, senha: String): Nutricionista {
-        val profissional = adicionarProfissional(nome, email, senha, "Nutrição")
-
-        val nutricionista = Nutricionista(
-            nomeNutri = profissional.nomeProfissional,
-            email = profissional.email,
-            senha = profissional.senha,
-            agenda = profissional.agenda
-        )
-        return nutricionista
-    }
-
-
-    fun adicionarPaciente(nome: String, email: String, senha: String): Paciente {
-        val novaAgenda = Agenda(
-            mutableListOf(),
-            mutableListOf()
-        )
-        val novoPaciente = Paciente(
-            nomePaciente = nome,
+        val novaAgenda = Agenda(mutableListOf(), mutableListOf())
+        val novoNutricionista = Nutricionista(
+            nomeNutri = nome,
             email = email,
             senha = senha,
             agenda = novaAgenda
+        )
+        listaProfissionais.add(novoNutricionista)
+        return novoNutricionista
+    }
+
+    fun adicionarPaciente(nome: String, email: String, senha: String): Paciente {
+        val novoPaciente = Paciente(
+            nomePaciente = nome,
+            email = email,
+            senha = senha
         )
         novoPaciente.dataCadastro = LocalDateTime.now()
         listaPacientes.add(novoPaciente)
