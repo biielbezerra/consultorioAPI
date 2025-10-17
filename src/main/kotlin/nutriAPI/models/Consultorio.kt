@@ -3,37 +3,64 @@ package com.nutriAPI.models
 import java.time.LocalDateTime
 import java.util.UUID
 
-class Consultorio(val idConsultorio: String = UUID.randomUUID().toString(),
-                  val nomeConsultorio: String) {
+class Consultorio(
+    val idConsultorio: String = UUID.randomUUID().toString(),
+    val nomeConsultorio: String
+) {
 
     val listaPacientes = mutableListOf<Paciente>()
-    val listaNutricionista = mutableListOf<Nutricionista>()
+    val listaProfissionais = mutableListOf<Profissional>()
     val listaConsultas = mutableListOf<Consulta>()
 
-    fun adicionarPaciente(nome: String, email: String, senha: String): Paciente {
-        val novoPaciente = Paciente(nomePaciente = nome,
+
+    fun buscarProfissionaisPorArea(area: String): List<Profissional> {
+        return listaProfissionais.filter { it.areaAtuacao == area }
+    }
+
+    fun adicionarProfissional(nome: String, email: String, senha: String, areaAtuacao: String): Profissional {
+        val novaAgenda = Agenda(
+            mutableListOf(),
+            mutableListOf()
+        )
+        val novoProfissional = Profissional(
+            nomeProfissional = nome,
             email = email,
             senha = senha,
-            consultasPaciente = mutableListOf(),
-            dataCadastro = LocalDateTime.now()
+            areaAtuacao = areaAtuacao,
+            agenda = novaAgenda
         )
-        listaPacientes.add(novoPaciente)
-        return novoPaciente
+        listaProfissionais.add(novoProfissional)
+        return novoProfissional
     }
 
     fun adicionarNutri(nome: String, email: String, senha: String): Nutricionista {
-        val novaAgenda = Agenda(mutableListOf(),
-                                mutableListOf()
+        val profissional = adicionarProfissional(nome, email, senha, "Nutrição")
+
+        val nutricionista = Nutricionista(
+            nomeNutri = profissional.nomeProfissional,
+            email = profissional.email,
+            senha = profissional.senha,
+            agenda = profissional.agenda
         )
-        val novoNutricionista = Nutricionista(nomeNutri = nome,
+        return nutricionista
+    }
+
+
+    fun adicionarPaciente(nome: String, email: String, senha: String): Paciente {
+        val novaAgenda = Agenda(
+            mutableListOf(),
+            mutableListOf()
+        )
+        val novoPaciente = Paciente(
+            nomePaciente = nome,
             email = email,
             senha = senha,
             agenda = novaAgenda
         )
-        listaNutricionista.add(novoNutricionista)
-        return novoNutricionista
+        novoPaciente.dataCadastro = LocalDateTime.now()
+        listaPacientes.add(novoPaciente)
+        return novoPaciente
     }
-
 
 
 }
