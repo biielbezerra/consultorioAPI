@@ -7,13 +7,16 @@ class Nutricionista(
     nomeNutri: String,
     email: String,
     senha: String,
-    agenda: Agenda
+    agenda: Agenda,
+    diasDeTrabalho: List<HorarioTrabalho>,
+    val CRN: String? = null
 ) : Profissional(
     nomeProfissional = nomeNutri,
     email = email,
     senha = senha,
     areaAtuacao = "Nutrição",
-    agenda = agenda
+    agenda = agenda,
+    diasDeTrabalho = diasDeTrabalho
 ) {
 
 }

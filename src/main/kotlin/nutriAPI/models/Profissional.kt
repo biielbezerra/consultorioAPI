@@ -1,5 +1,7 @@
 package com.nutriAPI.models
 
+import java.time.DayOfWeek
+import java.time.LocalTime
 import java.util.UUID
 
 open class Profissional(
@@ -9,7 +11,8 @@ open class Profissional(
     var senha: String,
     val areaAtuacao: String,
     var valorBaseConsulta: Double = 170.0,
-    var agenda: Agenda
+    var agenda: Agenda,
+    var diasDeTrabalho: List<HorarioTrabalho>
 ) {
 
     val consultasProfissional = mutableListOf<Consulta>()
@@ -18,9 +21,16 @@ open class Profissional(
         return consultasProfissional
     }
 
-    fun setValorConsulta(profissional: Profissional, novoValor: Double) {
+    fun setValorConsulta(novoValor: Double) {
         this.valorBaseConsulta = novoValor
     }
 
 
 }
+
+data class HorarioTrabalho(
+    val diaDaSemana: DayOfWeek,
+    val horarioInicio: LocalTime,
+    val horarioFim: LocalTime,
+    val consultorioId: String
+)

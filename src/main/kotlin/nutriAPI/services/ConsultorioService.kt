@@ -87,10 +87,6 @@ class ConsultorioService (private val pacienteService: PacienteService) {
         }
     }
 
-    fun validarHorarioParaAgendamento(agenda: Agenda, horario: LocalDateTime, consulta: Consulta): Boolean {
-        return agenda.estaDisponivel(horario,consulta.duracao)
-    }
-
     private fun criarEValidarConsulta(
         paciente: Paciente,
         profissional: Profissional,
@@ -108,7 +104,7 @@ class ConsultorioService (private val pacienteService: PacienteService) {
             valorConsulta = profissional.valorBaseConsulta
         )
 
-        if (!validarHorarioParaAgendamento(profissional.agenda, dataHora, novaConsulta)) {
+        if (!profissional.agenda.estaDisponivel(dataHora,novaConsulta.duracao)) {
             throw IllegalArgumentException("Horário do profissional indisponível")
         }
         if (!pacienteService.isPacienteDisponivel(paciente, dataHora, novaConsulta.duracao)) {
