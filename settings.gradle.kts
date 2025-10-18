@@ -1,4 +1,4 @@
-rootProject.name = "nutriAPI"
+rootProject.name = "consultorioAPI"
 
 dependencyResolutionManagement {
     repositories {

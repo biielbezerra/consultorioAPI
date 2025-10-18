@@ -1,10 +1,8 @@
-package com.nutriAPI.services
+package com.consultorioAPI.services
 
-import com.nutriAPI.models.Agenda
-import com.nutriAPI.models.Consulta
-import com.nutriAPI.models.Paciente
-import com.nutriAPI.models.StatusConsulta
-import com.nutriAPI.repositories.ConsultaRepository
+import com.consultorioAPI.models.Paciente
+import com.consultorioAPI.models.StatusConsulta
+import com.consultorioAPI.repositories.ConsultaRepository
 import java.time.Duration
 import java.time.LocalDateTime
 

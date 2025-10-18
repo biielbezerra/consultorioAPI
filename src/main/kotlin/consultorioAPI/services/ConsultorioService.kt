@@ -1,19 +1,17 @@
-package com.nutriAPI.services
+package com.consultorioAPI.services
 
-import com.nutriAPI.models.Agenda
-import com.nutriAPI.models.Consulta
-import com.nutriAPI.models.Consultorio
-import com.nutriAPI.models.HorarioTrabalho
-import com.nutriAPI.models.Nutricionista
-import com.nutriAPI.models.Paciente
-import com.nutriAPI.models.Profissional
-import com.nutriAPI.models.StatusConsulta
-import com.nutriAPI.repositories.ConsultaRepository
-import com.nutriAPI.repositories.ConsultorioRepository
-import com.nutriAPI.repositories.PacienteRepository
-import com.nutriAPI.repositories.ProfissionalRepository
-import java.awt.geom.Area
-import java.time.Duration
+import com.consultorioAPI.models.Agenda
+import com.consultorioAPI.models.Consulta
+import com.consultorioAPI.models.Consultorio
+import com.consultorioAPI.models.HorarioTrabalho
+import com.consultorioAPI.models.Nutricionista
+import com.consultorioAPI.models.Paciente
+import com.consultorioAPI.models.Profissional
+import com.consultorioAPI.models.StatusConsulta
+import com.consultorioAPI.repositories.ConsultaRepository
+import com.consultorioAPI.repositories.ConsultorioRepository
+import com.consultorioAPI.repositories.PacienteRepository
+import com.consultorioAPI.repositories.ProfissionalRepository
 import java.time.LocalDateTime
 
 class ConsultorioService (private val pacienteRepository: PacienteRepository,
@@ -21,7 +19,8 @@ class ConsultorioService (private val pacienteRepository: PacienteRepository,
                           private val consultorioRepository: ConsultorioRepository,
                           private val consultaRepository: ConsultaRepository,
                           private val pacienteService: PacienteService,
-                          private val agendaService: AgendaService) {
+                          private val agendaService: AgendaService
+) {
 
     val descontoConsultaDupla = 11.76
     val descontoClienteFiel = 12.0

@@ -1,6 +1,6 @@
-package com.nutriAPI.repositories
+package com.consultorioAPI.repositories
 
-import com.nutriAPI.models.Profissional
+import com.consultorioAPI.models.Profissional
 
 interface ProfissionalRepository {
 

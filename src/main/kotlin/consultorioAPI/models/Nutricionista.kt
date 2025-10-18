@@ -1,7 +1,4 @@
-package com.nutriAPI.models
-
-import java.time.LocalDateTime
-import java.util.UUID
+package com.consultorioAPI.models
 
 class Nutricionista(
     nomeNutri: String,

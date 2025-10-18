@@ -1,4 +1,4 @@
-package com.nutriAPI.models
+package com.consultorioAPI.models
 
 import java.time.DayOfWeek
 import java.time.LocalTime

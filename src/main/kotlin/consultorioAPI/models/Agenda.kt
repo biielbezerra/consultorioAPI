@@ -1,9 +1,7 @@
-package com.nutriAPI.models
+package com.consultorioAPI.models
 
-import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDateTime
-import java.time.LocalTime
 
 data class Agenda(
     val horariosDisponiveis: MutableList<LocalDateTime>,

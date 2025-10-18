@@ -1,10 +1,10 @@
-package com.nutriAPI.services
+package com.consultorioAPI.services
 
-import com.nutriAPI.models.Consulta
-import com.nutriAPI.models.Paciente
-import com.nutriAPI.models.Profissional
-import com.nutriAPI.models.StatusConsulta
-import com.nutriAPI.repositories.ConsultaRepository
+import com.consultorioAPI.models.Consulta
+import com.consultorioAPI.models.Paciente
+import com.consultorioAPI.models.Profissional
+import com.consultorioAPI.models.StatusConsulta
+import com.consultorioAPI.repositories.ConsultaRepository
 import java.time.LocalDateTime
 
 class ConsultaService(private val pacienteService: PacienteService,

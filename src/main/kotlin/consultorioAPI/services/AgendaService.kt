@@ -1,9 +1,8 @@
-package com.nutriAPI.services
+package com.consultorioAPI.services
 
-import com.nutriAPI.models.Agenda
-import com.nutriAPI.models.Consulta
-import com.nutriAPI.models.HorarioTrabalho
-import com.nutriAPI.models.Profissional
+import com.consultorioAPI.models.Agenda
+import com.consultorioAPI.models.HorarioTrabalho
+import com.consultorioAPI.models.Profissional
 import java.time.LocalDateTime
 import java.time.Duration
 import java.time.LocalDate

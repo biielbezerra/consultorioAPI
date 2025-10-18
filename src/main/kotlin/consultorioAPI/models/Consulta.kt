@@ -1,7 +1,6 @@
-package com.nutriAPI.models
+package com.consultorioAPI.models
 
 import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 

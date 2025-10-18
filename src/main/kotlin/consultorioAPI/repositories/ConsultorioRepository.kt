@@ -1,6 +1,6 @@
-package com.nutriAPI.repositories
+package com.consultorioAPI.repositories
 
-import com.nutriAPI.models.Consultorio
+import com.consultorioAPI.models.Consultorio
 
 interface ConsultorioRepository {
 

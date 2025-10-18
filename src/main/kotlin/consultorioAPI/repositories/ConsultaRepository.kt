@@ -1,6 +1,6 @@
-package com.nutriAPI.repositories
+package com.consultorioAPI.repositories
 
-import com.nutriAPI.models.Consulta
+import com.consultorioAPI.models.Consulta
 import java.time.LocalDateTime
 
 interface ConsultaRepository {

@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.ktor)
 }
 
-group = "com"
+group = "com.consultorioAPI"
 version = "0.0.1"
 
 application {
