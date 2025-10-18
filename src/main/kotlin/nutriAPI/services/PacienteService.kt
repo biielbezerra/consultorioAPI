@@ -4,14 +4,16 @@ import com.nutriAPI.models.Agenda
 import com.nutriAPI.models.Consulta
 import com.nutriAPI.models.Paciente
 import com.nutriAPI.models.StatusConsulta
+import com.nutriAPI.repositories.ConsultaRepository
 import java.time.Duration
 import java.time.LocalDateTime
 
-class PacienteService {
+class PacienteService(private val consultaRepository: ConsultaRepository) {
 
     fun isClienteFiel(paciente: Paciente): Boolean {
         val noventaDiasAtras = LocalDateTime.now().minusDays(90)
-        return paciente.consultasPaciente.any() { consulta ->
+        val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
+        return consultas.any() { consulta ->
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
                     consulta.dataHoraConsulta.isAfter(noventaDiasAtras)
         }
@@ -19,17 +21,20 @@ class PacienteService {
 
     fun verificarInatividade(paciente: Paciente): Boolean {
         val noventaDiasAtras = LocalDateTime.now().minusDays(90)
-        return paciente.consultasPaciente.none() { consulta ->
+        val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
+        return consultas.none() { consulta ->
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
                     consulta.dataHoraConsulta.isAfter(noventaDiasAtras)
         }
     }
 
     fun isPacienteDisponivel(paciente: Paciente, novoHorario: LocalDateTime, duracao: Duration): Boolean {
-        return paciente.consultasPaciente.none { consulta ->
+        val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
+        return consultas.none { consulta ->
+            if(consulta.statusConsulta == StatusConsulta.CANCELADA) return false
+
             val consultaExistenteInicio = consulta.dataHoraConsulta
             val consultaExistenteFim = consulta.horarioFim()
-
             val novoHorarioFim = novoHorario.plus(duracao)
 
             novoHorario.isBefore(consultaExistenteFim) && novoHorarioFim.isAfter(consultaExistenteInicio)

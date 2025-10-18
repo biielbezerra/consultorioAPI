@@ -10,10 +10,4 @@ data class Paciente(
     var senha: String
 ) {
     var dataCadastro: LocalDateTime? = null
-    val consultasPaciente = mutableListOf<Consulta>()
-
-    fun listarConsultas(): List<Consulta> {
-        return consultasPaciente
-    }
-
 }

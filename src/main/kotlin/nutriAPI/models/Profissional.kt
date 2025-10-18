@@ -15,12 +15,6 @@ open class Profissional(
     var diasDeTrabalho: List<HorarioTrabalho>
 ) {
 
-    val consultasProfissional = mutableListOf<Consulta>()
-
-    fun listarConsultas(): List<Consulta> {
-        return consultasProfissional
-    }
-
     fun setValorConsulta(novoValor: Double) {
         this.valorBaseConsulta = novoValor
     }

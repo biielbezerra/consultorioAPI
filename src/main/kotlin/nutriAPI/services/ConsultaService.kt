@@ -4,9 +4,12 @@ import com.nutriAPI.models.Consulta
 import com.nutriAPI.models.Paciente
 import com.nutriAPI.models.Profissional
 import com.nutriAPI.models.StatusConsulta
+import com.nutriAPI.repositories.ConsultaRepository
 import java.time.LocalDateTime
 
-class ConsultaService(private val pacienteService: PacienteService) {
+class ConsultaService(private val pacienteService: PacienteService,
+                      private val consultaRepository: ConsultaRepository
+) {
 
     fun reagendarConsulta(
         consulta: Consulta,
@@ -35,11 +38,7 @@ class ConsultaService(private val pacienteService: PacienteService) {
         profissional.agenda.liberarHorario(consulta.dataHoraConsulta, consulta.duracao)
         profissional.agenda.bloquearHorario(consultaReagendada.dataHoraConsulta, consultaReagendada)
 
-        profissional.consultasProfissional.remove(consulta)
-        paciente.consultasPaciente.remove(consulta)
-
-        profissional.consultasProfissional.add(consultaReagendada)
-        paciente.consultasPaciente.add(consultaReagendada)
+        consultaRepository.atualizar(consultaReagendada)
     }
 
     fun cancelarConsulta(consulta: Consulta, paciente: Paciente, profissional: Profissional) {
@@ -51,11 +50,7 @@ class ConsultaService(private val pacienteService: PacienteService) {
 
         val consultaCancelada = consulta.copy(statusConsulta = StatusConsulta.CANCELADA)
 
-        profissional.consultasProfissional.remove(consulta)
-        profissional.consultasProfissional.add(consultaCancelada)
-
-        paciente.consultasPaciente.remove(consulta)
-        paciente.consultasPaciente.add(consultaCancelada)
+        consultaRepository.atualizar(consultaCancelada)
 
     }
 
