@@ -34,3 +34,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Arquivos de configuração de ambiente local
+local.yaml
+*.env

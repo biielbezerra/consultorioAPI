@@ -9,9 +9,11 @@ import io.ktor.client.engine.cio.CIO
 
 object SupabaseConfig {
 
-    private const val SUPABASE_URL = "https://moprznbedfwcecjefkyr.supabase.co"
-    private const val SUPABASE_SERVICE_KEY =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vcHJ6bmJlZGZ3Y2VjamVma3lyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDc0NjI1OSwiZXhwIjoyMDc2MzIyMjU5fQ.kRSwKJMGhYWLc4xLPa-M0g57_WDlFGKcDFfThXE_v9Y"
+    private val SUPABASE_URL = System.getenv("SUPABASE_URL")
+        ?: throw IllegalStateException("Variável de ambiente SUPABASE_URL não definida.")
+
+    private val SUPABASE_SERVICE_KEY = System.getenv("SUPABASE_SERVICE_KEY")
+        ?: throw IllegalStateException("Variável de ambiente SUPABASE_SERVICE_KEY não definida.")
 
     val client: SupabaseClient = createSupabaseClient(
         supabaseUrl = SUPABASE_URL,
