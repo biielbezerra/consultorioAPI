@@ -31,5 +31,5 @@ data class Consulta(
 }
 
 enum class StatusConsulta {
-    AGENDADA, CANCELADA, REALIZADA
+    AGENDADA, CANCELADA, REALIZADA, NAO_COMPARECEU
 }

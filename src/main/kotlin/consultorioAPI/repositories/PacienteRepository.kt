@@ -6,12 +6,16 @@ interface PacienteRepository {
 
     fun salvar(paciente: Paciente): Paciente
 
+    fun atualizar(paciente: Paciente): Paciente
+
     fun buscarPorId(id: String): Paciente?
 
     fun buscarPorNome(nome: String): List<Paciente>
 
-    fun buscarPorEmail(email: String): Paciente?
+    fun buscarPorUserId(userID: String): Paciente?
 
     fun listarTodos(): List<Paciente>
+
+
 
 }

@@ -7,12 +7,12 @@ import java.util.UUID
 open class Profissional(
     val idProfissional: String = UUID.randomUUID().toString(),
     val nomeProfissional: String,
-    var email: String,
-    var senha: String,
+    val userId: String,
     val areaAtuacao: String,
     var valorBaseConsulta: Double = 170.0,
     var agenda: Agenda,
-    var diasDeTrabalho: List<HorarioTrabalho>
+    var diasDeTrabalho: List<HorarioTrabalho> = emptyList(),
+    var status: StatusUsuario = StatusUsuario.CONVIDADO,
 ) {
 
     fun setValorConsulta(novoValor: Double) {

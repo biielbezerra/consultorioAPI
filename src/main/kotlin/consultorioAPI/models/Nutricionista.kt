@@ -2,18 +2,16 @@ package com.consultorioAPI.models
 
 class Nutricionista(
     nomeNutri: String,
-    email: String,
-    senha: String,
+    userId: String,
     agenda: Agenda,
-    diasDeTrabalho: List<HorarioTrabalho>,
     val CRN: String? = null
 ) : Profissional(
     nomeProfissional = nomeNutri,
-    email = email,
-    senha = senha,
+    userId = userId,
     areaAtuacao = "Nutrição",
     agenda = agenda,
-    diasDeTrabalho = diasDeTrabalho
+    diasDeTrabalho = emptyList(),
+    status = StatusUsuario.CONVIDADO
 ) {
 
 }

@@ -29,7 +29,7 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
     fun isPacienteDisponivel(paciente: Paciente, novoHorario: LocalDateTime, duracao: Duration): Boolean {
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
         return consultas.none { consulta ->
-            if(consulta.statusConsulta == StatusConsulta.CANCELADA) return false
+            if(consulta.statusConsulta == StatusConsulta.CANCELADA) return@none false
 
             val consultaExistenteInicio = consulta.dataHoraConsulta
             val consultaExistenteFim = consulta.horarioFim()

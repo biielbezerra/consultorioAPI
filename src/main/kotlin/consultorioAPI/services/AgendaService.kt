@@ -3,13 +3,15 @@ package com.consultorioAPI.services
 import com.consultorioAPI.models.Agenda
 import com.consultorioAPI.models.HorarioTrabalho
 import com.consultorioAPI.models.Profissional
+import com.consultorioAPI.models.Role
+import com.consultorioAPI.models.User
+import com.consultorioAPI.repositories.ProfissionalRepository
 import java.time.LocalDateTime
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 
-class AgendaService() {
-
+class AgendaService(private val profissionalRepository: ProfissionalRepository) {
 
     fun gerarDisponibilidadePadrao(
         agenda: Agenda,
@@ -63,17 +65,6 @@ class AgendaService() {
         )
     }
 
-    fun adicionarNovoDiaDisponivel(profissional: Profissional) {
-        val novoDiaParaAdicionar = LocalDate.now().plusWeeks(4)
-
-        gerarDisponibilidadePadrao(
-            agenda = profissional.agenda,
-            regras = profissional.diasDeTrabalho,
-            dataInicio = novoDiaParaAdicionar,
-            dataFim = novoDiaParaAdicionar
-        )
-    }
-
     fun removerHorariosIntervalo(agenda: Agenda, inicio: LocalDateTime, fim: LocalDateTime, tamanhoSlot: Duration = Duration.ofMinutes(30) ) {
         var horarioAtual = inicio
         while (horarioAtual.isBefore(fim)) {
@@ -82,7 +73,22 @@ class AgendaService() {
         }
     }
 
-    fun definirDiaDeFolga(profissional: Profissional, diaDeFolga: LocalDate) {
+    fun definirDiaDeFolga(profissional: Profissional, diaDeFolga: LocalDate, usuarioLogado: User) {
+
+        when (usuarioLogado.role) {
+            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {}
+
+            Role.PROFISSIONAL -> {
+                val perfilProfissionalLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                    ?: throw SecurityException("Perfil profissional não encontrado.")
+
+                if (perfilProfissionalLogado.idProfissional != profissional.idProfissional) {
+                    throw SecurityException("Profissionais só podem definir folgas para suas próprias agendas.")
+                }
+            }
+            Role.PACIENTE -> throw SecurityException("Pacientes não podem definir dias de folga.")
+        }
+
         val blocosDeTrabalhoDoDia = profissional.diasDeTrabalho.filter { it.diaDaSemana == diaDeFolga.dayOfWeek }
 
         if (blocosDeTrabalhoDoDia.isEmpty()) {
