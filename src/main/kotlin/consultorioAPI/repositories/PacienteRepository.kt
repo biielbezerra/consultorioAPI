@@ -12,7 +12,7 @@ interface PacienteRepository {
 
     suspend fun buscarPorNome(nome: String): List<Paciente>
 
-    suspend fun buscarPorUserId(userID: String): Paciente?
+    suspend fun buscarPorUserId(userId: String): Paciente?
 
     suspend fun listarTodos(): List<Paciente>
 

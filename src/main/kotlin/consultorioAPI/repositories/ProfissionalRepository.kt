@@ -13,9 +13,9 @@ interface ProfissionalRepository {
 
     suspend fun buscarPorNome(nome: String): List<Profissional>
 
-    suspend fun buscarPorUserId(userID: String): Profissional?
+    suspend fun buscarPorUserId(userId: String): Profissional?
 
-    suspend fun buscarPorArea(area: AreaAtuacao): List<Profissional>
+    suspend fun buscarPorArea(areaId: String): List<Profissional>
 
     suspend fun listarTodos(): List<Profissional>
 

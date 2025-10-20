@@ -69,6 +69,24 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository) 
     }
 
     @OptIn(ExperimentalTime::class)
+    suspend fun definirHorarioTrabalhoEGerarAgenda(
+        profissionalId: String,
+        novosDiasDeTrabalho: List<HorarioTrabalho>,
+        usuarioLogado: User
+    ) {
+        val profissional = profissionalRepository.buscarPorId(profissionalId) ?: throw Exception("Not found")
+        // Checar Permissão (só o próprio profissional ou admin/recepcionista)
+        // ... (when usuarioLogado.role ...)
+        profissional.diasDeTrabalho = novosDiasDeTrabalho
+        val hoje = Clock.System.todayIn(fusoHorarioPadrao)
+        val dataFutura = hoje.plus(4 * 7, DateTimeUnit.DAY)
+        profissional.agenda.horariosDisponiveis.clear()
+        profissional.agenda.horariosBloqueados.clear()
+        gerarDisponibilidadePadrao(profissional.agenda, novosDiasDeTrabalho, hoje, dataFutura)
+        profissionalRepository.atualizar(profissional)
+    }
+
+    @OptIn(ExperimentalTime::class)
     fun removerHorariosIntervalo(
         agenda: Agenda,
         inicio: LocalDateTime,

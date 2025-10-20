@@ -23,5 +23,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.ktor.server.test.host)
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:3.2.5")
     testImplementation(libs.kotlin.test.junit)
 }
