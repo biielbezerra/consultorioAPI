@@ -3,39 +3,54 @@ package com.consultorioAPI.services
 import com.consultorioAPI.models.Paciente
 import com.consultorioAPI.models.StatusConsulta
 import com.consultorioAPI.repositories.ConsultaRepository
-import java.time.Duration
-import java.time.LocalDateTime
+import kotlinx.datetime.*
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 class PacienteService(private val consultaRepository: ConsultaRepository) {
 
-    fun isClienteFiel(paciente: Paciente): Boolean {
-        val noventaDiasAtras = LocalDateTime.now().minusDays(90)
+    @OptIn(ExperimentalTime::class)
+    suspend fun isClienteFiel(paciente: Paciente): Boolean {
+        val agora: Instant = Clock.System.now()
+        val noventaDiasAtras: Instant = agora.minus(90.days)
+
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
-        return consultas.any() { consulta ->
+        return consultas.any { consulta ->
+            val dataHoraConsultaInstant = consulta.dataHoraConsulta.toInstant(fusoHorarioPadrao)
+
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
-                    consulta.dataHoraConsulta.isAfter(noventaDiasAtras)
+                    dataHoraConsultaInstant > noventaDiasAtras
         }
     }
 
-    fun verificarInatividade(paciente: Paciente): Boolean {
-        val noventaDiasAtras = LocalDateTime.now().minusDays(90)
+    @OptIn(ExperimentalTime::class)
+    suspend fun verificarInatividade(paciente: Paciente): Boolean {
+        val agora: Instant = Clock.System.now()
+        val noventaDiasAtras: Instant = agora.minus(90.days)
+
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
-        return consultas.none() { consulta ->
+        return consultas.none { consulta ->
+            val dataHoraConsultaInstant = consulta.dataHoraConsulta.toInstant(fusoHorarioPadrao)
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
-                    consulta.dataHoraConsulta.isAfter(noventaDiasAtras)
+                    dataHoraConsultaInstant > noventaDiasAtras
         }
     }
-
-    fun isPacienteDisponivel(paciente: Paciente, novoHorario: LocalDateTime, duracao: Duration): Boolean {
+    @OptIn(ExperimentalTime::class)
+    suspend fun isPacienteDisponivel(paciente: Paciente, novoHorario: LocalDateTime, duracao: Duration): Boolean {
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
+        val novoHorarioFim = novoHorario.toInstant(fusoHorarioPadrao).plus(duracao).toLocalDateTime(fusoHorarioPadrao)
+
         return consultas.none { consulta ->
             if(consulta.statusConsulta == StatusConsulta.CANCELADA) return@none false
 
             val consultaExistenteInicio = consulta.dataHoraConsulta
             val consultaExistenteFim = consulta.horarioFim()
-            val novoHorarioFim = novoHorario.plus(duracao)
 
-            novoHorario.isBefore(consultaExistenteFim) && novoHorarioFim.isAfter(consultaExistenteInicio)
+            novoHorario < consultaExistenteFim && novoHorarioFim > consultaExistenteInicio
         }
     }
 

@@ -4,17 +4,17 @@ import com.consultorioAPI.models.Paciente
 
 interface PacienteRepository {
 
-    fun salvar(paciente: Paciente): Paciente
+    suspend fun salvar(paciente: Paciente): Paciente
 
-    fun atualizar(paciente: Paciente): Paciente
+    suspend fun atualizar(paciente: Paciente): Paciente
 
-    fun buscarPorId(id: String): Paciente?
+    suspend fun buscarPorId(id: String): Paciente?
 
-    fun buscarPorNome(nome: String): List<Paciente>
+    suspend fun buscarPorNome(nome: String): List<Paciente>
 
-    fun buscarPorUserId(userID: String): Paciente?
+    suspend fun buscarPorUserId(userID: String): Paciente?
 
-    fun listarTodos(): List<Paciente>
+    suspend fun listarTodos(): List<Paciente>
 
 
 

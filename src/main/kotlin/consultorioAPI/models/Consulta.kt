@@ -1,8 +1,12 @@
 package com.consultorioAPI.models
 
-import java.time.Duration
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration.Companion.minutes
 import java.util.UUID
+import kotlin.time.ExperimentalTime
 
 data class Consulta(
     val idConsulta: String = UUID.randomUUID().toString(),
@@ -17,7 +21,7 @@ data class Consulta(
     var valorConsulta: Double,
     var descontoPercentual: Double = 0.0,
     var isAvulso: Boolean = false,
-    var duracao: Duration = Duration.ofMinutes(60)
+    var duracaoEmMinutos: Int = 60
 ) {
 
     fun aplicarDesconto(desconto: Double) {
@@ -25,8 +29,11 @@ data class Consulta(
         this.valorConsulta = this.valorBase * (1 - desconto / 100)
     }
 
+    @OptIn(ExperimentalTime::class)
     fun horarioFim(): LocalDateTime {
-        return dataHoraConsulta.plus(duracao)
+        val fusoHorario = TimeZone.currentSystemDefault() // Ou TimeZone.UTC
+        val duracao = this.duracaoEmMinutos.minutes
+        return dataHoraConsulta.toInstant(fusoHorario).plus(duracao).toLocalDateTime(fusoHorario)
     }
 }
 

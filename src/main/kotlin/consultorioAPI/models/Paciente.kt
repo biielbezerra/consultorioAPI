@@ -1,6 +1,6 @@
 package com.consultorioAPI.models
 
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
 import java.util.UUID
 
 data class Paciente(

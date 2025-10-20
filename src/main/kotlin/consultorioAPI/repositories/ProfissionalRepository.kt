@@ -4,18 +4,22 @@ import com.consultorioAPI.models.Profissional
 
 interface ProfissionalRepository {
 
-    fun salvar(profissional: Profissional): Profissional
+    suspend fun salvar(profissional: Profissional): Profissional
 
-    fun atualizar(profissional: Profissional): Profissional
+    suspend fun atualizar(profissional: Profissional): Profissional
 
-    fun buscarPorId(id: String): Profissional?
+    suspend fun buscarPorId(id: String): Profissional?
 
-    fun buscarPorNome(nome: String): List<Profissional>
+    suspend fun buscarPorNome(nome: String): List<Profissional>
 
-    fun buscarPorUserId(userID: String): Profissional?
+    suspend fun buscarPorEmail(email: String): Profissional?
 
-    fun buscarPorArea(area: String): List<Profissional>
+    suspend fun buscarPorUserId(userID: String): Profissional?
 
-    fun listarTodos(): List<Profissional>
+    suspend fun buscarPorArea(area: String): List<Profissional>
+
+    suspend fun listarTodos(): List<Profissional>
+
+    suspend fun listarTodosAtivos(): List<Profissional>
 
 }

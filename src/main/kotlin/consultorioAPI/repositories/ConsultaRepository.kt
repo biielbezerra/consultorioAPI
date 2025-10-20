@@ -5,16 +5,16 @@ import java.time.LocalDateTime
 
 interface ConsultaRepository {
 
-    fun salvar(consulta: Consulta): Consulta
+    suspend fun salvar(consulta: Consulta): Consulta
 
-    fun buscarPorId(id: String): Consulta?
+    suspend fun buscarPorId(id: String): Consulta?
 
-    fun buscarPorPacienteId(pacienteId: String): List<Consulta>
+    suspend fun buscarPorPacienteId(pacienteId: String): List<Consulta>
 
-    fun buscarPorProfissionalId(profissionalId: String): List<Consulta>
+    suspend fun buscarPorProfissionalId(profissionalId: String): List<Consulta>
 
-    fun buscarPorIntervaloDeDatas(inicio: LocalDateTime, fim: LocalDateTime): List<Consulta>
+    suspend fun buscarPorIntervaloDeDatas(inicio: LocalDateTime, fim: LocalDateTime): List<Consulta>
 
-    fun atualizar(consulta: Consulta): Consulta
+    suspend fun atualizar(consulta: Consulta): Consulta
 
 }

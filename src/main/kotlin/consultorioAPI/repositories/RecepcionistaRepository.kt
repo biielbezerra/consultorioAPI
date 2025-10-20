@@ -4,14 +4,16 @@ import com.consultorioAPI.models.Recepcionista
 
 interface RecepcionistaRepository {
 
-    fun salvar(recepcionista: Recepcionista): Recepcionista
+    suspend fun salvar(recepcionista: Recepcionista): Recepcionista
 
-    fun bucarPorId(id: String): Recepcionista?
+    suspend fun atualizar(recepcionista: Recepcionista): Recepcionista
 
-    fun buscarPorUserId(userId: String): Recepcionista?
+    suspend fun bucarPorId(id: String): Recepcionista?
 
-    fun buscarPorNome(nome: String): List<Recepcionista>
+    suspend fun buscarPorUserId(userId: String): Recepcionista?
 
-    fun listarTodos(): List<Recepcionista>
+    suspend fun buscarPorNome(nome: String): List<Recepcionista>
+
+    suspend fun listarTodos(): List<Recepcionista>
 
 }

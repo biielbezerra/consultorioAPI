@@ -4,12 +4,12 @@ import com.consultorioAPI.models.Consultorio
 
 interface ConsultorioRepository {
 
-    fun salvar(consultorio: Consultorio): Consultorio
+    suspend fun salvar(consultorio: Consultorio): Consultorio
 
-    fun buscarPorId(id: String): Consultorio?
+    suspend fun buscarPorId(id: String): Consultorio?
 
-    fun buscarPorNome(nome: String): List<Consultorio>
+    suspend fun buscarPorNome(nome: String): List<Consultorio>
 
-    fun listarTodos(): List<Consultorio>
+    suspend fun listarTodos(): List<Consultorio>
 
 }

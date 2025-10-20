@@ -6,56 +6,60 @@ import com.consultorioAPI.models.Profissional
 import com.consultorioAPI.models.Role
 import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ProfissionalRepository
-import java.time.LocalDateTime
-import java.time.Duration
-import java.time.LocalDate
-import java.time.LocalTime
+import kotlinx.datetime.*
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
+
+val fusoHorarioPadrao = TimeZone.currentSystemDefault()
 
 class AgendaService(private val profissionalRepository: ProfissionalRepository) {
 
-    fun gerarDisponibilidadePadrao(
+    suspend fun gerarDisponibilidadePadrao(
         agenda: Agenda,
         regras: List<HorarioTrabalho>,
         dataInicio: LocalDate,
         dataFim: LocalDate,
-        tamanhoSlot: Duration = Duration.ofMinutes(30)
-        ){
-
+        tamanhoSlot: Duration = 30.minutes
+    ){
         var dataAtual = dataInicio
 
-        while (!dataAtual.isAfter(dataFim)){
+        while (dataAtual <= dataFim){
             val blocosDeTrabalhoDoDia = regras.filter { it.diaDaSemana == dataAtual.dayOfWeek }
 
             blocosDeTrabalhoDoDia.forEach { bloco ->
-                val inicioDoBloco = LocalDateTime.of(dataAtual, bloco.horarioInicio)
-                val fimDoBloco = LocalDateTime.of(dataAtual, bloco.horarioFim)
+                val inicioDoBloco: LocalDateTime = dataAtual.atTime(bloco.horarioInicio)
+                val fimDoBloco: LocalDateTime = dataAtual.atTime(bloco.horarioFim)
 
                 definirHorarioDisponivel(agenda, inicioDoBloco, fimDoBloco, tamanhoSlot)
             }
-            dataAtual = dataAtual.plusDays(1)
+            dataAtual = dataAtual.plus(1, DateTimeUnit.DAY)
         }
     }
 
+    @OptIn(ExperimentalTime::class)
     fun definirHorarioDisponivel(
         agenda: Agenda,
-        horario: LocalDateTime,
+        inicio: LocalDateTime,
         fim: LocalDateTime,
-        tamanhoSlot: Duration = Duration.ofMinutes(30)
+        tamanhoSlot: Duration = 30.minutes
     ) {
-        var atual = horario
+        var atual = inicio
 
-        while(atual.isBefore(fim)){
+        while(atual < fim){
             if(!agenda.horariosDisponiveis.contains(atual)){
                 agenda.horariosDisponiveis.add(atual)
             }
-            atual = atual.plus(tamanhoSlot)
+            atual = atual.toInstant(fusoHorarioPadrao).plus(tamanhoSlot).toLocalDateTime(fusoHorarioPadrao)
         }
-
     }
 
-    fun inicializarAgenda(profissional: Profissional) {
-        val hoje = LocalDate.now()
-        val dataFutura = hoje.plusWeeks(4)
+    @OptIn(ExperimentalTime::class)
+    suspend fun inicializarAgenda(profissional: Profissional) {
+        val hoje: LocalDate = Clock.System.todayIn(fusoHorarioPadrao)
+        val dataFutura: LocalDate = hoje.plus(4 * 7, DateTimeUnit.DAY)
 
         gerarDisponibilidadePadrao(
             agenda = profissional.agenda,
@@ -65,15 +69,21 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository) 
         )
     }
 
-    fun removerHorariosIntervalo(agenda: Agenda, inicio: LocalDateTime, fim: LocalDateTime, tamanhoSlot: Duration = Duration.ofMinutes(30) ) {
+    @OptIn(ExperimentalTime::class)
+    fun removerHorariosIntervalo(
+        agenda: Agenda,
+        inicio: LocalDateTime,
+        fim: LocalDateTime,
+        tamanhoSlot: Duration = 30.minutes
+    ) {
         var horarioAtual = inicio
-        while (horarioAtual.isBefore(fim)) {
+        while (horarioAtual < fim) {
             agenda.horariosDisponiveis.remove(horarioAtual)
-            horarioAtual = horarioAtual.plus(tamanhoSlot)
+            horarioAtual = horarioAtual.toInstant(fusoHorarioPadrao).plus(tamanhoSlot).toLocalDateTime(fusoHorarioPadrao)
         }
     }
 
-    fun definirDiaDeFolga(profissional: Profissional, diaDeFolga: LocalDate, usuarioLogado: User) {
+    suspend fun definirDiaDeFolga(profissional: Profissional, diaDeFolga: LocalDate, usuarioLogado: User) {
 
         when (usuarioLogado.role) {
             Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {}
@@ -96,78 +106,85 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository) 
         }
 
         blocosDeTrabalhoDoDia.forEach { bloco ->
-            val inicioDoBloco = LocalDateTime.of(diaDeFolga, bloco.horarioInicio)
-            val fimDoBloco = LocalDateTime.of(diaDeFolga, bloco.horarioFim)
+            val inicioDoBloco: LocalDateTime = diaDeFolga.atTime(bloco.horarioInicio)
+            val fimDoBloco: LocalDateTime = diaDeFolga.atTime(bloco.horarioFim)
 
             removerHorariosIntervalo(profissional.agenda, inicioDoBloco, fimDoBloco)
         }
     }
 
+    @OptIn(ExperimentalTime::class)
     fun listarHorariosDisponiveisPorLocal(
         profissional: Profissional,
         consultorioId: String,
-        duracao: Duration = Duration.ofMinutes(60)
+        duracao: Duration = 60.minutes
     ): List<LocalDateTime> {
 
         val todosHorariosPossiveis = listarHorariosDisponiveis(profissional.agenda, duracao)
 
         return todosHorariosPossiveis.filter { horario ->
             profissional.diasDeTrabalho.any { regra ->
+                val horarioLocal = horario.time
                 regra.consultorioId == consultorioId &&
                         regra.diaDaSemana == horario.dayOfWeek &&
-                        !horario.toLocalTime().isBefore(regra.horarioInicio) &&
-                        !horario.toLocalTime().plus(duracao).isAfter(regra.horarioFim)
+                        horarioLocal >= regra.horarioInicio &&
+                        horario.toInstant(fusoHorarioPadrao).plus(duracao).toLocalDateTime(fusoHorarioPadrao).time <= regra.horarioFim
             }
         }
     }
 
     fun listarHorariosDisponiveis(
         agenda: Agenda,
-        duracao: Duration = Duration.ofMinutes(60)
+        duracao: Duration = 60.minutes
     ): List<LocalDateTime> {
-        return agenda.horariosDisponiveis
+        val slotsPotenciais = agenda.horariosDisponiveis
             .filter { !agenda.horariosBloqueados.contains(it) }
-            .filter { horarioDeInicio -> agenda.estaDisponivel(horarioDeInicio, duracao) }
-    }
 
-}
+        return slotsPotenciais.filter { horarioDeInicio ->
+            agenda.estaDisponivel(horarioDeInicio, duracao)
+        }
+    }
 
 enum class StatusSlot { DISPONIVEL, OCUPADO, PASSADO, FORA_DO_HORARIO_DE_TRABALHO }
 
-fun obterStatusDaAgenda(
-    profissional: Profissional,
-    dataInicio: LocalDate,
-    dataFim: LocalDate
-): Map<LocalDateTime, StatusSlot> {
-    val statusMap = mutableMapOf<LocalDateTime, StatusSlot>()
-    var dataAtual = dataInicio
+    @OptIn(ExperimentalTime::class)
+    fun obterStatusDaAgenda(
+        profissional: Profissional,
+        dataInicio: LocalDate,
+        dataFim: LocalDate
+    ): Map<LocalDateTime, StatusSlot> {
+        val statusMap = mutableMapOf<LocalDateTime, StatusSlot>()
+        var dataAtual = dataInicio
+        val agora: Instant = Clock.System.now()
 
-    while (!dataAtual.isAfter(dataFim)) {
-        val blocosDeTrabalho = profissional.diasDeTrabalho.filter { it.diaDaSemana == dataAtual.dayOfWeek }
-        if (blocosDeTrabalho.isEmpty()) {
-            var slotDoDiaDeFolga = LocalDateTime.of(dataAtual, LocalTime.of(8, 0))
-            val fimDoDiaDeFolga = LocalDateTime.of(dataAtual, LocalTime.of(18, 0))
-            while (slotDoDiaDeFolga.isBefore(fimDoDiaDeFolga)) {
-                statusMap[slotDoDiaDeFolga] = StatusSlot.FORA_DO_HORARIO_DE_TRABALHO
-                slotDoDiaDeFolga = slotDoDiaDeFolga.plusMinutes(30)
-            }
-        } else {
-            blocosDeTrabalho.forEach { bloco ->
-                var slotAtual = LocalDateTime.of(dataAtual, bloco.horarioInicio)
-                val fimDoBloco = LocalDateTime.of(dataAtual, bloco.horarioFim)
-                while (slotAtual.isBefore(fimDoBloco)) {
-                    val status = when {
-                        profissional.agenda.horariosBloqueados.contains(slotAtual) -> StatusSlot.OCUPADO
-                        !profissional.agenda.horariosDisponiveis.contains(slotAtual) -> StatusSlot.FORA_DO_HORARIO_DE_TRABALHO
-                        slotAtual.isBefore(LocalDateTime.now()) -> StatusSlot.PASSADO
-                        else -> StatusSlot.DISPONIVEL
+        while (dataAtual <= dataFim) {
+            val blocosDeTrabalho = profissional.diasDeTrabalho.filter { it.diaDaSemana == dataAtual.dayOfWeek }
+            if (blocosDeTrabalho.isEmpty()) {
+                var slotDoDiaDeFolga: LocalDateTime = dataAtual.atTime(LocalTime(8, 0))
+                val fimDoDiaDeFolga: LocalDateTime = dataAtual.atTime(LocalTime(18, 0))
+                while (slotDoDiaDeFolga < fimDoDiaDeFolga) {
+                    statusMap[slotDoDiaDeFolga] = StatusSlot.FORA_DO_HORARIO_DE_TRABALHO
+                    slotDoDiaDeFolga = slotDoDiaDeFolga.toInstant(fusoHorarioPadrao).plus(30.minutes).toLocalDateTime(fusoHorarioPadrao)
+                }
+            } else {
+                blocosDeTrabalho.forEach { bloco ->
+                    var slotAtual: LocalDateTime = dataAtual.atTime(bloco.horarioInicio)
+                    val fimDoBloco: LocalDateTime = dataAtual.atTime(bloco.horarioFim)
+                    while (slotAtual < fimDoBloco) {
+                        val slotInstant = slotAtual.toInstant(fusoHorarioPadrao)
+                        val status = when {
+                            profissional.agenda.horariosBloqueados.contains(slotAtual) -> StatusSlot.OCUPADO
+                            !profissional.agenda.horariosDisponiveis.contains(slotAtual) -> StatusSlot.FORA_DO_HORARIO_DE_TRABALHO
+                            slotInstant < agora -> StatusSlot.PASSADO
+                            else -> StatusSlot.DISPONIVEL
+                        }
+                        statusMap[slotAtual] = status
+                        slotAtual = slotAtual.toInstant(fusoHorarioPadrao).plus(30.minutes).toLocalDateTime(fusoHorarioPadrao)
                     }
-                    statusMap[slotAtual] = status
-                    slotAtual = slotAtual.plusMinutes(30)
                 }
             }
+            dataAtual = dataAtual.plus(1, DateTimeUnit.DAY)
         }
-        dataAtual = dataAtual.plusDays(1)
+        return statusMap
     }
-    return statusMap
 }

@@ -1,10 +1,10 @@
 package com.consultorioAPI.models
 
-import java.time.DayOfWeek
-import java.time.LocalTime
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 import java.util.UUID
 
-open class Profissional(
+data class Profissional(
     val idProfissional: String = UUID.randomUUID().toString(),
     val nomeProfissional: String,
     val userId: String,

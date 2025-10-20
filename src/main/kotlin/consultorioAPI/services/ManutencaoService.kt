@@ -3,7 +3,11 @@ package com.consultorioAPI.services
 import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
-import java.time.LocalDate
+import kotlinx.datetime.*
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.ExperimentalTime
 
 class ManutencaoService(private val pacienteRepository: PacienteRepository,
                         private val profissionalRepository: ProfissionalRepository,
@@ -11,14 +15,16 @@ class ManutencaoService(private val pacienteRepository: PacienteRepository,
                         private val agendaService: AgendaService
 ) {
 
-    fun executarManutencaoDiaria() {
+    suspend fun executarManutencaoDiaria() {
         atualizarAgendasFuturas()
         atualizarStatusDePacientesInativos()
     }
 
-    private fun atualizarAgendasFuturas() {
+    @OptIn(ExperimentalTime::class)
+    private suspend fun atualizarAgendasFuturas() {
 
-        val novoDiaParaAdicionar = LocalDate.now().plusWeeks(4)
+        val hoje: LocalDate = Clock.System.todayIn(fusoHorarioPadrao)
+        val novoDiaParaAdicionar: LocalDate = hoje.plus(4 * 7, DateTimeUnit.DAY)
 
         val todosProfissionais = profissionalRepository.listarTodos()
 
@@ -35,7 +41,7 @@ class ManutencaoService(private val pacienteRepository: PacienteRepository,
         }
     }
 
-    private fun atualizarStatusDePacientesInativos() {
+    private suspend fun atualizarStatusDePacientesInativos() {
         val todosPacientes = pacienteRepository.listarTodos()
 
         todosPacientes.forEach { paciente ->

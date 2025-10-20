@@ -4,6 +4,7 @@ ktor = "3.3.0"
 logback = "1.4.14"
 supabase-jan-tennert = "3.2.5"
 ktorClientCio = "3.3.0"
+kotlinxDatetime = "0.7.0"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core-jvm", version.ref = "ktor" }
@@ -16,6 +17,7 @@ supabase-gotrue = { group = "io.github.jan-tennert.supabase", name = "auth-kt", 
 supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt", version.ref = "supabase-jan-tennert" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 
 
 [plugins]

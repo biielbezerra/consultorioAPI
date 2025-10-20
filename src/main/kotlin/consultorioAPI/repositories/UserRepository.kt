@@ -4,12 +4,14 @@ import com.consultorioAPI.models.User
 
 interface UserRepository {
 
-    fun salvar(user: User): User
+    suspend fun salvar(user: User): User
 
-    fun buscarPorID(id: String): User?
+    suspend fun atualizar(user: User): User
 
-    fun deletarPorId(id: String)
+    suspend fun buscarPorId(id: String): User?
 
-    fun buscarPorEmail(email: String): User?
+    suspend fun deletarPorId(id: String)
+
+    suspend fun buscarPorEmail(email: String): User?
 
 }

@@ -12,8 +12,12 @@ import com.consultorioAPI.repositories.ProfissionalRepository
 import com.consultorioAPI.repositories.RecepcionistaRepository
 import com.consultorioAPI.repositories.UserRepository
 import com.consultorioAPI.utils.HashingUtil
-import java.time.LocalDateTime
+import kotlinx.datetime.*
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import java.util.UUID
+import kotlin.time.ExperimentalTime
 
 class UsuarioService(private val userRepository: UserRepository,
                      private val pacienteRepository: PacienteRepository,
@@ -21,7 +25,8 @@ class UsuarioService(private val userRepository: UserRepository,
                      private val recepcionistaRepository: RecepcionistaRepository,
                      private val agendaService: AgendaService
 ) {
-    fun registrarPaciente(nome: String, email: String, senha: String): Paciente {
+    @OptIn(ExperimentalTime::class)
+    suspend fun registrarPaciente(nome: String, email: String, senha: String): Paciente {
         if(userRepository.buscarPorEmail(email) != null){
             throw IllegalArgumentException("Email existente já em uso")
         }
@@ -39,15 +44,15 @@ class UsuarioService(private val userRepository: UserRepository,
             userId = usuarioSalvo.idUsuario,
             status = StatusUsuario.ATIVO
         )
-        newPaciente.dataCadastro = LocalDateTime.now()
+        newPaciente.dataCadastro = Clock.System.now().toLocalDateTime(fusoHorarioPadrao)
         return pacienteRepository.salvar(newPaciente)
     }
 
-    fun preCadastrarEquipe(
+    suspend fun preCadastrarEquipe(
         nome: String,
         email: String,
         role: Role,
-        areaAtuacaoId: String?,
+        areaAtuacaoId: String,
         atributos: Map<String, String>? = null,
         usuarioLogado: User
     ): User {
@@ -67,7 +72,7 @@ class UsuarioService(private val userRepository: UserRepository,
 
         when(role){
             Role.PROFISSIONAL -> {
-                if(areaAtuacaoId.isNullOrBlank()){
+                if(areaAtuacaoId.isBlank()){
                     throw IllegalArgumentException("Área de atuação é obrigatória para profissionais.")
                 }
                 val novaAgenda = Agenda(mutableListOf(), mutableListOf())
@@ -89,7 +94,7 @@ class UsuarioService(private val userRepository: UserRepository,
         return usuarioSalvo
     }
 
-    fun completaCadastro(email: String, senhaNova: String): User {
+    suspend fun completaCadastro(email: String, senhaNova: String): User {
         val user = userRepository.buscarPorEmail(email)
             ?: throw IllegalArgumentException("Usuário não encontrado.")
 
@@ -97,19 +102,63 @@ class UsuarioService(private val userRepository: UserRepository,
 
         when(user.role){
             Role.PROFISSIONAL -> {
-                val perfil = profissionalRepository.buscarPorUserId(user.idUsuario)!!
+                val perfil = profissionalRepository.buscarPorUserId(user.idUsuario)
+                    ?: throw IllegalStateException("Perfil profissional não encontrado para este usuário.")
+                if (perfil.status != StatusUsuario.CONVIDADO) {
+                    throw IllegalStateException("Este convite não está mais pendente.")
+                }
                 perfil.status = StatusUsuario.ATIVO
-                profissionalRepository.salvar(perfil)
+                profissionalRepository.atualizar(perfil)
             }
             Role.RECEPCIONISTA -> {
                 val perfil = recepcionistaRepository.buscarPorUserId(user.idUsuario)!!
                 perfil.status = StatusUsuario.ATIVO
-                recepcionistaRepository.salvar(perfil)
+                recepcionistaRepository.atualizar(perfil)
             }
             else -> throw IllegalStateException("Este usuário não é um perfil de equipe.")
         }
 
-        return userRepository.salvar(user)
+        return userRepository.atualizar(user)
+    }
+
+    suspend fun atualizarStatusEquipe(
+        userIdAlvo: String,
+        novoStatus: StatusUsuario,
+        usuarioLogado: User
+    ) {
+        if (usuarioLogado.role != Role.SUPER_ADMIN) {
+            throw SecurityException("Apenas Super Admins podem alterar o status de membros da equipe.")
+        }
+
+        val userAlvo = userRepository.buscarPorId(userIdAlvo)
+            ?: throw IllegalArgumentException("Usuário alvo não encontrado.")
+
+        if (userAlvo.role == Role.PACIENTE || userAlvo.role == Role.SUPER_ADMIN) {
+            throw IllegalArgumentException("Esta função só pode alterar o status de Profissionais ou Recepcionistas.")
+        }
+        if (novoStatus == StatusUsuario.CONVIDADO) {
+            throw IllegalArgumentException("Não é possível definir o status para CONVIDADO manualmente.")
+        }
+
+        when (userAlvo.role) {
+            Role.PROFISSIONAL -> {
+                val perfil = profissionalRepository.buscarPorUserId(userAlvo.idUsuario)
+                    ?: throw IllegalStateException("Perfil profissional não encontrado para este usuário.")
+                if (perfil.status != novoStatus) {
+                    perfil.status = novoStatus
+                    profissionalRepository.atualizar(perfil)
+                }
+            }
+            Role.RECEPCIONISTA -> {
+                val perfil = recepcionistaRepository.buscarPorUserId(userAlvo.idUsuario)
+                    ?: throw IllegalStateException("Perfil de recepcionista não encontrado para este usuário.")
+                if (perfil.status != novoStatus) {
+                    perfil.status = novoStatus
+                    recepcionistaRepository.atualizar(perfil)
+                }
+            }
+            else -> {}
+        }
     }
 
 }
