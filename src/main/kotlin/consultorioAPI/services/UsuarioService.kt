@@ -47,7 +47,8 @@ class UsuarioService(private val userRepository: UserRepository,
         nome: String,
         email: String,
         role: Role,
-        areaAtuacao: String,
+        areaAtuacaoId: String?,
+        atributos: Map<String, String>? = null,
         usuarioLogado: User
     ): User {
         if (usuarioLogado.role != Role.SUPER_ADMIN) {
@@ -66,15 +67,16 @@ class UsuarioService(private val userRepository: UserRepository,
 
         when(role){
             Role.PROFISSIONAL -> {
-                if(areaAtuacao.isBlank()){
+                if(areaAtuacaoId.isNullOrBlank()){
                     throw IllegalArgumentException("Área de atuação é obrigatória para profissionais.")
                 }
                 val novaAgenda = Agenda(mutableListOf(), mutableListOf())
                 val novoProfissional = Profissional(
                     nomeProfissional = nome,
                     userId = usuarioSalvo.idUsuario,
-                    areaAtuacao = areaAtuacao,
-                    agenda = novaAgenda
+                    areaAtuacaoId = areaAtuacaoId,
+                    agenda = novaAgenda,
+                    atributosEspecificos = atributos ?: emptyMap()
                 )
                 profissionalRepository.salvar(novoProfissional)
             }

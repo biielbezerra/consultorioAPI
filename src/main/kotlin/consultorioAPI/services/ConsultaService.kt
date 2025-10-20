@@ -10,6 +10,7 @@ import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
+import java.time.Duration
 import java.time.LocalDateTime
 
 class ConsultaService(private val pacienteService: PacienteService,

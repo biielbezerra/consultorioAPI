@@ -8,17 +8,17 @@ open class Profissional(
     val idProfissional: String = UUID.randomUUID().toString(),
     val nomeProfissional: String,
     val userId: String,
-    val areaAtuacao: String,
+    val areaAtuacaoId: String,
     var valorBaseConsulta: Double = 170.0,
     var agenda: Agenda,
     var diasDeTrabalho: List<HorarioTrabalho> = emptyList(),
     var status: StatusUsuario = StatusUsuario.CONVIDADO,
+    var atributosEspecificos: Map<String, String> = emptyMap()
 ) {
 
     fun setValorConsulta(novoValor: Double) {
         this.valorBaseConsulta = novoValor
     }
-
 
 }
 

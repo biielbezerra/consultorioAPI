@@ -4,7 +4,6 @@ import com.consultorioAPI.models.Agenda
 import com.consultorioAPI.models.Consulta
 import com.consultorioAPI.models.Consultorio
 import com.consultorioAPI.models.HorarioTrabalho
-import com.consultorioAPI.models.Nutricionista
 import com.consultorioAPI.models.Paciente
 import com.consultorioAPI.models.Profissional
 import com.consultorioAPI.models.Role
@@ -14,6 +13,7 @@ import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.ConsultorioRepository
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
+import java.time.Duration
 import java.time.LocalDateTime
 
 class ConsultorioService (private val consultorioRepository: ConsultorioRepository,
@@ -25,7 +25,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 ) {
 
     val descontoConsultaDupla = 11.76
-    val descontoClienteFiel = 12.0
+    val descontoClienteFiel = 11.76
 
     fun cadastroConsultorio(nome: String, endereco: String, usuarioLogado: User): Consultorio {
 
@@ -131,7 +131,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             nomePaciente = paciente.nomePaciente,
             profissionalID = profissional.idProfissional,
             nomeProfissional = profissional.nomeProfissional,
-            area = profissional.areaAtuacao,
+            area = profissional.areaAtuacaoId,
             dataHoraConsulta = dataHora,
             statusConsulta = StatusConsulta.AGENDADA,
             valorBase = profissional.valorBaseConsulta,
