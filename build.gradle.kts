@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 group = "com.consultorioAPI"
@@ -19,6 +20,8 @@ dependencies {
     implementation(libs.supabase.gotrue)
     implementation(libs.supabase.realtime)
     implementation(libs.ktor.client.cio)
+    implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }
