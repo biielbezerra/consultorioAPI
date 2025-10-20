@@ -7,9 +7,11 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.minutes
 import java.util.UUID
 import kotlin.time.ExperimentalTime
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class Consulta(
-    val idConsulta: String = UUID.randomUUID().toString(),
+    val idConsultaArg: String? = null,
     val pacienteID: String?,
     val nomePaciente: String?,
     val profissionalID: String?,
@@ -23,6 +25,7 @@ data class Consulta(
     var isAvulso: Boolean = false,
     var duracaoEmMinutos: Int = 60
 ) {
+    val idConsulta: String = idConsultaArg ?: UUID.randomUUID().toString()
 
     fun aplicarDesconto(desconto: Double) {
         this.descontoPercentual = desconto
@@ -37,6 +40,7 @@ data class Consulta(
     }
 }
 
+@Serializable
 enum class StatusConsulta {
     AGENDADA, CANCELADA, REALIZADA, NAO_COMPARECEU
 }

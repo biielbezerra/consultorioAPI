@@ -5,7 +5,9 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.ktor.client.engine.cio.CIO
+import kotlinx.datetime.TimeZone
 
+val fusoHorarioPadrao = TimeZone.currentSystemDefault()
 
 object SupabaseConfig {
 

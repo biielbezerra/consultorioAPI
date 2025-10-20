@@ -1,7 +1,7 @@
 package com.consultorioAPI.repositories
 
 import com.consultorioAPI.models.Consulta
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
 
 interface ConsultaRepository {
 

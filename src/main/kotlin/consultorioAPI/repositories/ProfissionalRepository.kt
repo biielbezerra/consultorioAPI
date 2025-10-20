@@ -1,5 +1,6 @@
 package com.consultorioAPI.repositories
 
+import com.consultorioAPI.models.AreaAtuacao
 import com.consultorioAPI.models.Profissional
 
 interface ProfissionalRepository {
@@ -12,11 +13,9 @@ interface ProfissionalRepository {
 
     suspend fun buscarPorNome(nome: String): List<Profissional>
 
-    suspend fun buscarPorEmail(email: String): Profissional?
-
     suspend fun buscarPorUserId(userID: String): Profissional?
 
-    suspend fun buscarPorArea(area: String): List<Profissional>
+    suspend fun buscarPorArea(area: AreaAtuacao): List<Profissional>
 
     suspend fun listarTodos(): List<Profissional>
 

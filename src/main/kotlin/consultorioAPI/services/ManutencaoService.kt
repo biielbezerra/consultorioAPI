@@ -1,5 +1,6 @@
 package com.consultorioAPI.services
 
+import com.consultorioAPI.config.fusoHorarioPadrao
 import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository

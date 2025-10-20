@@ -8,7 +8,7 @@ interface RecepcionistaRepository {
 
     suspend fun atualizar(recepcionista: Recepcionista): Recepcionista
 
-    suspend fun bucarPorId(id: String): Recepcionista?
+    suspend fun buscarPorId(id: String): Recepcionista?
 
     suspend fun buscarPorUserId(userId: String): Recepcionista?
 

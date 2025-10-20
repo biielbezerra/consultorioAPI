@@ -7,7 +7,9 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class Agenda(
     val horariosDisponiveis: MutableList<LocalDateTime>,
     val horariosBloqueados: MutableList<LocalDateTime>

@@ -1,5 +1,6 @@
 package com.consultorioAPI.services
 
+import com.consultorioAPI.config.fusoHorarioPadrao
 import com.consultorioAPI.models.Agenda
 import com.consultorioAPI.models.HorarioTrabalho
 import com.consultorioAPI.models.Profissional
@@ -12,8 +13,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
-
-val fusoHorarioPadrao = TimeZone.currentSystemDefault()
 
 class AgendaService(private val profissionalRepository: ProfissionalRepository) {
 
