@@ -15,7 +15,9 @@ data class Profissional(
     var agenda: Agenda,
     var diasDeTrabalho: List<HorarioTrabalho> = emptyList(),
     var status: StatusUsuario = StatusUsuario.CONVIDADO,
-    var atributosEspecificos: Map<String, String> = emptyMap()
+    var atributosEspecificos: Map<String, String> = emptyMap(),
+    var conviteToken: String? = null,
+    var isDeletado: Boolean = false
 ) {
     val idProfissional: String = idProfissionalArg ?: UUID.randomUUID().toString()
 

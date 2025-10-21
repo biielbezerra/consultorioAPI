@@ -8,7 +8,8 @@ data class User(
     val idUsuarioArg: String? = null,
     var email: String,
     var senhaHash: String,
-    val role: Role
+    val role: Role,
+    var isDeletado: Boolean = false
 ){
     val idUsuario: String = idUsuarioArg ?: UUID.randomUUID().toString()
 }

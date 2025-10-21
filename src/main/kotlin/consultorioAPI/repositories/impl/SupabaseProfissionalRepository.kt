@@ -1,6 +1,7 @@
 package com.consultorioAPI.repositories.impl
 
 import com.consultorioAPI.config.SupabaseConfig
+import com.consultorioAPI.models.Paciente
 import com.consultorioAPI.models.Profissional
 import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.repositories.ProfissionalRepository
@@ -32,6 +33,7 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
         return table.select {
             filter {
                 eq("idProfissional", id)
+                eq("isDeletado", false)
             }
         }.decodeAsOrNull<Profissional>()
     }
@@ -40,6 +42,7 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
         return table.select {
             filter {
                 ilike("nomeProfissional", "%${nome}%")
+                eq("isDeletado", false)
             }
         }.decodeList()
     }
@@ -48,6 +51,7 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
         return table.select {
             filter {
                 eq("userId", userId)
+                eq("isDeletado", false)
             }
         }.decodeAsOrNull<Profissional>()
     }
@@ -56,12 +60,17 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
         return table.select {
             filter {
                 eq("areaAtuacaoId", areaId)
+                eq("isDeletado", false)
             }
         }.decodeList()
     }
 
     override suspend fun listarTodos(): List<Profissional> {
-        return table.select().decodeList()
+        return table.select {
+            filter {
+                eq("isDeletado", false)
+            }
+        }.decodeList()
     }
 
     override suspend fun listarTodosAtivos(): List<Profissional> {
@@ -71,4 +80,21 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
             }
         }.decodeList()
     }
+
+    override suspend fun buscarPorToken(token: String): Profissional? {
+        return table.select{
+            filter {
+                eq("conviteToken", token)
+            }
+        }.decodeAsOrNull<Profissional>()
+    }
+
+    override suspend fun deletarPorId(id: String) {
+        table.delete {
+            filter {
+                eq("idProfissional", id)
+            }
+        }
+    }
+
 }

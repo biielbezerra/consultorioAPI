@@ -16,6 +16,6 @@ interface PacienteRepository {
 
     suspend fun listarTodos(): List<Paciente>
 
-
+    suspend fun deletarPorId(id: String)
 
 }

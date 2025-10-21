@@ -31,6 +31,7 @@ class SupabasePacienteRepository : PacienteRepository {
         return table.select {
             filter {
                 eq("idPaciente", id)
+                eq("isDeletado", false)
             }
         }.decodeAsOrNull<Paciente>()
     }
@@ -39,6 +40,7 @@ class SupabasePacienteRepository : PacienteRepository {
         return table.select {
             filter {
                 ilike("nomePaciente", "%${nome}%")
+                eq("isDeletado", false)
             }
         }.decodeList()
     }
@@ -47,11 +49,25 @@ class SupabasePacienteRepository : PacienteRepository {
         return table.select {
             filter {
                 eq("userId", userId)
+                eq("isDeletado", false)
             }
         }.decodeAsOrNull<Paciente>()
     }
 
     override suspend fun listarTodos(): List<Paciente> {
-        return table.select().decodeList()
+        return table.select {
+            filter {
+                eq("isDeletado", false)
+            }
+        }.decodeList()
     }
+
+    override suspend fun deletarPorId(id: String) {
+        table.delete {
+            filter {
+                eq("idPaciente", id)
+            }
+        }
+    }
+
 }

@@ -9,7 +9,8 @@ data class Paciente(
     val idPacienteArg: String? = null,
     val nomePaciente: String,
     val userId: String,
-    var status: StatusUsuario = StatusUsuario.ATIVO
+    var status: StatusUsuario = StatusUsuario.ATIVO,
+    var isDeletado: Boolean = false
 ) {
     val idPaciente: String = idPacienteArg ?: UUID.randomUUID().toString()
     var dataCadastro: LocalDateTime? = null
