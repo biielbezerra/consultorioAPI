@@ -22,7 +22,9 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
-    testImplementation(libs.ktor.server.test.host)
     implementation("io.github.jan-tennert.supabase:postgrest-kt:3.2.5")
+    implementation(libs.ktor.server.auth)
+    implementation(libs.ktor.server.auth.jwt)
+    testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }

@@ -17,14 +17,10 @@ data class Profissional(
     var status: StatusUsuario = StatusUsuario.CONVIDADO,
     var atributosEspecificos: Map<String, String> = emptyMap(),
     var conviteToken: String? = null,
+    var promocoesAtivadasIds: List<String> = emptyList(),
     var isDeletado: Boolean = false
 ) {
     val idProfissional: String = idProfissionalArg ?: UUID.randomUUID().toString()
-
-    fun setValorConsulta(novoValor: Double) {
-        this.valorBaseConsulta = novoValor
-    }
-
 }
 
 @Serializable

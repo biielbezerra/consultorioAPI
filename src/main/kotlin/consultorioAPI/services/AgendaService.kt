@@ -13,6 +13,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 class AgendaService(private val profissionalRepository: ProfissionalRepository) {
 
@@ -53,19 +54,6 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository) 
             }
             atual = atual.toInstant(fusoHorarioPadrao).plus(tamanhoSlot).toLocalDateTime(fusoHorarioPadrao)
         }
-    }
-
-    @OptIn(ExperimentalTime::class)
-    suspend fun inicializarAgenda(profissional: Profissional) {
-        val hoje: LocalDate = Clock.System.todayIn(fusoHorarioPadrao)
-        val dataFutura: LocalDate = hoje.plus(4 * 7, DateTimeUnit.DAY)
-
-        gerarDisponibilidadePadrao(
-            agenda = profissional.agenda,
-            regras = profissional.diasDeTrabalho,
-            dataInicio = hoje,
-            dataFim = dataFutura
-        )
     }
 
     @OptIn(ExperimentalTime::class)

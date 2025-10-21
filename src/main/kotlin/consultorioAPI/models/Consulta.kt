@@ -23,7 +23,8 @@ data class Consulta(
     var valorConsulta: Double,
     var descontoPercentual: Double = 0.0,
     var isAvulso: Boolean = false,
-    var duracaoEmMinutos: Int = 60
+    var duracaoEmMinutos: Int = 60,
+    var promocoesAplicadasIds: List<String>? = null
 ) {
     val idConsulta: String = idConsultaArg ?: UUID.randomUUID().toString()
 

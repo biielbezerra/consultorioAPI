@@ -1,5 +1,6 @@
 package com
 
+import com.consultorioAPI.config.configureSecurity
 import io.ktor.server.application.*
 
 fun main(args: Array<String>) {
@@ -7,5 +8,6 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    configureSecurity()
     configureRouting()
 }

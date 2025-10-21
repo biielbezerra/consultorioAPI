@@ -159,6 +159,38 @@ class UsuarioService(private val userRepository: UserRepository,
         return usuarioAtualizado
     }
 
+    @OptIn(ExperimentalTime::class)
+    suspend fun preCadastrarPacientePeloStaff(
+        nome: String,
+        email: String,
+        usuarioLogado: User
+    ): Paciente {
+        if (usuarioLogado.role == Role.PACIENTE) {
+            throw SecurityException("Pacientes não podem pré-cadastrar outros pacientes.")
+        }
+
+        val senhaTemporaria = HashingUtil.hashSenha(UUID.randomUUID().toString())
+        val newUser = User(
+            email = email,
+            senhaHash = senhaTemporaria,
+            role = Role.PACIENTE
+        )
+        val usuarioSalvo = userRepository.salvar(newUser)
+
+        val newPaciente = Paciente(
+            nomePaciente = nome,
+            userId = usuarioSalvo.idUsuario,
+            status = StatusUsuario.ATIVO
+        )
+        newPaciente.dataCadastro = Clock.System.now().toLocalDateTime(fusoHorarioPadrao)
+
+        val pacienteSalvo = pacienteRepository.salvar(newPaciente)
+
+        TODO("Disparar e-mail para o paciente (email) com link para definir a senha")
+
+        return pacienteSalvo
+    }
+
     suspend fun recusarConvite(token: String) {
         val profissional = profissionalRepository.buscarPorToken(token)
         val recepcionista = recepcionistaRepository.buscarPorToken(token)
@@ -293,6 +325,16 @@ class UsuarioService(private val userRepository: UserRepository,
         userRepository.deletarPorId(userAlvo.idUsuario)
 
         // TODO: Invalidar tokens de sessão/autenticação deste usuário, se houver.
+    }
+
+    suspend fun desbloquearEmailPaciente(
+        emailAlvo: String,
+        usuarioLogado: User
+    ) {
+        if (usuarioLogado.role != Role.SUPER_ADMIN) {
+            throw SecurityException("Apenas Super Admins podem desbloquear emails.")
+        }
+        emailBlocklistRepository.deletarPorEmail(emailAlvo)
     }
 
     suspend fun listarEmailsBloqueados(usuarioLogado: User): List<String> {

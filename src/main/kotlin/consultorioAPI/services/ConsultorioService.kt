@@ -1,32 +1,42 @@
 package com.consultorioAPI.services
 
 import com.consultorioAPI.config.fusoHorarioPadrao
+import com.consultorioAPI.exceptions.EmailBloqueadoException
+import com.consultorioAPI.exceptions.PacienteInativoException
 import com.consultorioAPI.models.Consulta
 import com.consultorioAPI.models.Consultorio
 import com.consultorioAPI.models.Paciente
 import com.consultorioAPI.models.Profissional
+import com.consultorioAPI.models.Promocao
 import com.consultorioAPI.models.Role
 import com.consultorioAPI.models.StatusConsulta
+import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.ConsultorioRepository
+import com.consultorioAPI.repositories.EmailBlocklistRepository
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
+import com.consultorioAPI.repositories.UserRepository
+import com.consultorioAPI.services.UsuarioService
 import kotlinx.datetime.*
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.math.min
+import kotlin.time.ExperimentalTime
 
 class ConsultorioService (private val consultorioRepository: ConsultorioRepository,
                           private val consultaRepository: ConsultaRepository,
                           private val pacienteService: PacienteService,
                           private val agendaService: AgendaService,
                           private val pacienteRepository: PacienteRepository,
-                          private val profissionalRepository: ProfissionalRepository
+                          private val profissionalRepository: ProfissionalRepository,
+                          private val promocaoService: PromocaoService,
+                          private val emailBlocklistRepository: EmailBlocklistRepository,
+                          private val userRepository: UserRepository,
+                          private val usuarioService: UsuarioService,
 ) {
-
-    val descontoConsultaDupla = 11.76
-    val descontoClienteFiel = 11.76
 
     suspend fun cadastroConsultorio(nome: String, endereco: String, usuarioLogado: User): Consultorio {
 
@@ -38,15 +48,17 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         return consultorioRepository.salvar(novoConsultorio)
     }
 
+    @OptIn(ExperimentalTime::class)
     suspend fun agendarPrimeiraConsultaDupla(
         paciente: Paciente,
         profissional: Profissional,
         dataHora1: LocalDateTime,
         dataHora2: LocalDateTime,
         usuarioLogado: User,
+        codigoPromocional: String? = null,
         quantidade: Int = 2
     ): List<Consulta> {
-
+        verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = true)
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
         if (usuarioLogado.role == Role.PROFISSIONAL) {
@@ -57,34 +69,41 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
         }
 
-        val consultas = mutableListOf<Consulta>()
-        val primeiraConsulta = criarEValidarConsulta(paciente, profissional,dataHora1)
-        val segundaConsulta = criarEValidarConsulta(paciente, profissional,dataHora2)
+        val consulta1 = criarEValidarConsulta(paciente, profissional, dataHora1)
+        val consulta2 = criarEValidarConsulta(paciente, profissional, dataHora2)
 
-        val desconto = calcularDescontoAutomatico(paciente, quantidade)
+        val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
+            paciente = paciente,
+            profissional = profissional,
+            dataConsultaProposta = consulta1.dataHoraConsulta.toInstant(fusoHorarioPadrao),
+            quantidadeConsultasSimultaneas = quantidade,
+            codigoPromocionalInput = codigoPromocional
+        )
 
-        //primeira consulta
-        primeiraConsulta.aplicarDesconto(desconto)
+        val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
+        val idsPromocoesAplicadas = promocoesAplicadas.map { it.idPromocao }
 
-        registrarConsulta(paciente, profissional, primeiraConsulta)
-        consultas.add(primeiraConsulta)
+        consulta1.aplicarDesconto(descontoTotal)
+        consulta1.promocoesAplicadasIds = idsPromocoesAplicadas
+        registrarConsulta(paciente, profissional, consulta1)
 
-        //segunda consulta
-        segundaConsulta.aplicarDesconto(desconto)
+        consulta2.aplicarDesconto(descontoTotal)
+        consulta2.promocoesAplicadasIds = idsPromocoesAplicadas
+        registrarConsulta(paciente, profissional, consulta2)
 
-        registrarConsulta(paciente, profissional, segundaConsulta)
-        consultas.add(segundaConsulta)
-
-        return consultas
+        return listOf(consulta1, consulta2)
     }
 
+    @OptIn(ExperimentalTime::class)
     suspend fun agendarConsultaPaciente(
         paciente: Paciente,
         profissional: Profissional,
         dataHora: LocalDateTime,
         usuarioLogado: User,
+        codigoPromocional: String? = null,
         quantidade: Int = 1
     ): Consulta {
+        verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = false)
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
         if (usuarioLogado.role == Role.PROFISSIONAL) {
@@ -95,21 +114,34 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
         }
 
-        val novaConsulta = criarEValidarConsulta(paciente, profissional,dataHora)
-        val desconto = calcularDescontoAutomatico(paciente, quantidade)
-        novaConsulta.aplicarDesconto(desconto)
-        registrarConsulta(paciente, profissional, novaConsulta)
+        val novaConsulta = criarEValidarConsulta(paciente, profissional, dataHora)
 
+        val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
+            paciente = paciente,
+            profissional = profissional,
+            dataConsultaProposta = novaConsulta.dataHoraConsulta.toInstant(fusoHorarioPadrao),
+            quantidadeConsultasSimultaneas = quantidade,
+            codigoPromocionalInput = codigoPromocional
+        )
+
+        val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
+        novaConsulta.aplicarDesconto(descontoTotal)
+        novaConsulta.promocoesAplicadasIds = promocoesAplicadas.map { it.idPromocao }
+
+        registrarConsulta(paciente, profissional, novaConsulta)
         return novaConsulta
     }
 
-    suspend fun agendarConsultaProfissional(paciente: Paciente,
-                                    profissional: Profissional,
-                                    dataHora: LocalDateTime,
-                                    descontoManual: Boolean = false,
-                                    descontoManualValor: Double,
-                                    usuarioLogado: User,
-                                    quantidade: Int = 1): Consulta {
+    @OptIn(ExperimentalTime::class)
+    suspend fun agendarConsultaProfissional(
+        paciente: Paciente,
+        profissional: Profissional,
+        dataHora: LocalDateTime,
+        usuarioLogado: User,
+        codigoPromocional: String? = null,
+        quantidade: Int = 1): Consulta
+    {
+        verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = false)
 
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
@@ -121,27 +153,36 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
         }
 
-        val novaConsulta = criarEValidarConsulta(paciente, profissional,dataHora)
+        val novaConsulta = criarEValidarConsulta(paciente, profissional, dataHora)
 
-        if(descontoManual){
-            novaConsulta.aplicarDesconto(descontoManualValor)
-            registrarConsulta(paciente, profissional, novaConsulta)
-            return novaConsulta
-        }
+        val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
+            paciente = paciente,
+            profissional = profissional,
+            dataConsultaProposta = novaConsulta.dataHoraConsulta.toInstant(fusoHorarioPadrao),
+            quantidadeConsultasSimultaneas = quantidade,
+            codigoPromocionalInput = codigoPromocional
+        )
 
-        var desconto = calcularDescontoAutomatico(paciente,quantidade)
-        novaConsulta.aplicarDesconto(desconto)
+        val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
+        novaConsulta.aplicarDesconto(descontoTotal)
+        novaConsulta.promocoesAplicadasIds = promocoesAplicadas.map { it.idPromocao }
+
         registrarConsulta(paciente, profissional, novaConsulta)
         return novaConsulta
     }
 
-    suspend fun calcularDescontoAutomatico(paciente: Paciente, quantidade: Int): Double {
-        val temConsultasAnteriores = consultaRepository.buscarPorPacienteId(paciente.idPaciente).isNotEmpty()
-        return when {
-            !temConsultasAnteriores && quantidade == 2 -> descontoConsultaDupla
-            pacienteService.isClienteFiel(paciente) -> descontoClienteFiel
-            else -> 0.0
+    private fun calcularDescontoTotal(promocoesAplicadas: List<Promocao>): Double {
+        val cumulativas = promocoesAplicadas.filter { it.isCumulativa }
+        val naoCumulativas = promocoesAplicadas.filterNot { it.isCumulativa }
+
+        val melhorNaoCumulativa = naoCumulativas.maxByOrNull { it.percentualDesconto }
+
+        var descontoTotal = cumulativas.sumOf { it.percentualDesconto }
+        if (melhorNaoCumulativa != null) {
+            descontoTotal += melhorNaoCumulativa.percentualDesconto
         }
+
+        return min(descontoTotal, 100.0)
     }
 
     private suspend fun criarEValidarConsulta(
@@ -192,6 +233,69 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                 return
             }
             Role.PROFISSIONAL -> return
+        }
+    }
+
+    suspend fun buscarOuPreCadastrarPaciente(
+        email: String,
+        nome: String,
+        usuarioLogado: User
+    ): Paciente {
+        if (usuarioLogado.role == Role.PACIENTE) {
+            throw SecurityException("Pacientes não podem usar esta função de busca/cadastro.")
+        }
+        if (emailBlocklistRepository.buscarPorEmail(email) != null) {
+            throw EmailBloqueadoException("Este email está bloqueado e não pode ser usado para agendamento ou cadastro.")
+        }
+
+        val userExistente = userRepository.buscarPorEmail(email)
+
+        if (userExistente != null) {
+            if (userExistente.role != Role.PACIENTE) {
+                throw IllegalArgumentException("Este email pertence a um membro da equipe, não a um paciente.")
+            }
+            // 5. Buscar o perfil Paciente associado
+            val pacienteExistente = pacienteRepository.buscarPorUserId(userExistente.idUsuario)
+                ?: throw IllegalStateException("Usuário encontrado, mas perfil de paciente associado não existe.")
+
+            // 6. Verificar se o paciente existente está ATIVO
+            if (pacienteExistente.status == StatusUsuario.INATIVO) {
+                // Lança exceção específica com o ID do paciente
+                throw PacienteInativoException(
+                    "Este paciente existe mas está INATIVO. Reative-o para agendar.",
+                    pacienteExistente.idPaciente
+                )
+                // O frontend pode capturar PacienteInativoException e mostrar o botão "Reativar?" (chamando atualizarStatusEquipe)
+            } else if (pacienteExistente.status != StatusUsuario.ATIVO) {
+                // Outros status não ativos (CONVIDADO, RECUSADO - não deveriam acontecer para Paciente, mas por segurança)
+                throw IllegalStateException("Este paciente existe mas não está ativo no sistema (${pacienteExistente.status}).")
+            }
+            return pacienteExistente
+        } else {
+            if (nome.isBlank()) {
+                throw IllegalArgumentException("Nome do paciente é obrigatório para pré-cadastro.")
+            }
+            return usuarioService.preCadastrarPacientePeloStaff(nome, email, usuarioLogado)
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    private suspend fun verificarLimiteAgendamentosFuturos(pacienteId: String, isAgendamentoDuplo: Boolean) {
+        val agora = Clock.System.now()
+        val consultasFuturasAgendadas = consultaRepository.buscarPorPacienteId(pacienteId)
+            .filter {
+                it.statusConsulta == StatusConsulta.AGENDADA &&
+                        it.dataHoraConsulta.toInstant(fusoHorarioPadrao) > agora
+            }
+
+        if (isAgendamentoDuplo) {
+            if (consultasFuturasAgendadas.isNotEmpty()) {
+                throw IllegalStateException("Não é possível agendar consulta dupla inicial se já existem agendamentos futuros.")
+            }
+        } else {
+            if (consultasFuturasAgendadas.isNotEmpty()) {
+                throw IllegalStateException("Você já possui uma consulta futura agendada. Aguarde a realização ou cancele-a para agendar uma nova.")
+            }
         }
     }
 

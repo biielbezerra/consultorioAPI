@@ -23,13 +23,12 @@ object SupabaseConfig {
     ) {
         httpEngine = CIO.create()
 
-        // Instala o módulo de Autenticação (para o Passo 4)
         install(Auth) {
-            // Configurações de autenticação, se necessário (ex: autoRefreshToken = true)
+
         }
 
         install(Postgrest) {
-            // Configurações do Postgrest, se necessário (ex: defaultSchema = "public")
+
         }
 
         // install(Realtime) { ... }
