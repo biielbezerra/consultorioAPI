@@ -23,10 +23,6 @@ object SupabaseConfig {
     ) {
         httpEngine = CIO.create()
 
-        install(Auth) {
-
-        }
-
         install(Postgrest) {
 
         }

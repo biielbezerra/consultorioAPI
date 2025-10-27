@@ -1,23 +1,18 @@
 package com.consultorioAPI.services
 
+import com.consultorioAPI.config.SupabaseConfig
 import com.consultorioAPI.config.fusoHorarioPadrao
-import com.consultorioAPI.models.Agenda
-import com.consultorioAPI.models.Paciente
-import com.consultorioAPI.models.Profissional
-import com.consultorioAPI.models.Recepcionista
-import com.consultorioAPI.models.Role
-import com.consultorioAPI.models.StatusUsuario
-import com.consultorioAPI.models.User
-import com.consultorioAPI.repositories.AreaAtuacaoRepository
-import com.consultorioAPI.repositories.EmailBlocklistRepository
-import com.consultorioAPI.repositories.PacienteRepository
-import com.consultorioAPI.repositories.ProfissionalRepository
-import com.consultorioAPI.repositories.RecepcionistaRepository
-import com.consultorioAPI.repositories.UserRepository
-import com.consultorioAPI.utils.HashingUtil
-import kotlinx.datetime.*
-import kotlin.time.Clock
+import com.consultorioAPI.exceptions.EmailBloqueadoException
+import com.consultorioAPI.models.*
+import com.consultorioAPI.repositories.*
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserRecord
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.admin.*
+import io.github.jan.supabase.exceptions.BadRequestRestException
+import kotlinx.datetime.toLocalDateTime
 import java.util.UUID
+import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
 class UsuarioService(private val userRepository: UserRepository,
@@ -28,30 +23,12 @@ class UsuarioService(private val userRepository: UserRepository,
                      private val areaAtuacaoRepository: AreaAtuacaoRepository,
                      private val emailBlocklistRepository: EmailBlocklistRepository
 ) {
-    @OptIn(ExperimentalTime::class)
-    suspend fun registrarPaciente(nome: String, email: String, senha: String): Paciente {
-        if (emailBlocklistRepository.buscarPorEmail(email) != null) {
-            throw IllegalArgumentException("Este email está bloqueado e não pode ser registrado.")
-        }
-        if(userRepository.buscarPorEmail(email) != null){
-            throw IllegalArgumentException("Email existente já em uso")
-        }
 
-        val senhaHash = HashingUtil.hashSenha(senha)
-        val newUser = User(
-            email = email,
-            senhaHash = senhaHash,
-            role = Role.PACIENTE
-        )
-        val usuarioSalvo = userRepository.salvar(newUser)
+    private val firebaseAuth = FirebaseAuth.getInstance()
 
-        val newPaciente = Paciente(
-            nomePaciente = nome,
-            userId = usuarioSalvo.idUsuario,
-            status = StatusUsuario.ATIVO
-        )
-        newPaciente.dataCadastro = Clock.System.now().toLocalDateTime(fusoHorarioPadrao)
-        return pacienteRepository.salvar(newPaciente)
+    @Deprecated("Usar AuthService.registrarNovoPaciente que chama criarPerfilPacienteAposAuth")
+    suspend fun registrarPacienteLegado(nome: String, email: String, senha: String): Paciente {
+        throw NotImplementedError("Registro de paciente deve ser feito via AuthService.")
     }
 
     suspend fun preCadastrarEquipe(
@@ -73,41 +50,75 @@ class UsuarioService(private val userRepository: UserRepository,
         }
 
         val token = UUID.randomUUID().toString()
+        var idUsuarioFirebase: String? = null
 
-        val senhaTemporaria = HashingUtil.hashSenha(UUID.randomUUID().toString())
-        val newUser = User(email = email, senhaHash = senhaTemporaria, role = role)
-        val usuarioSalvo = userRepository.salvar(newUser)
+        try {
+            val request = UserRecord.CreateRequest()
+                .setEmail(email)
+                .setEmailVerified(false)
+                .setDisabled(false)
 
-        when(role){
-            Role.PROFISSIONAL -> {
-                if(areaAtuacaoId.isBlank()){
-                    throw IllegalArgumentException("Área de atuação é obrigatória para profissionais.")
+            val authUser = firebaseAuth.createUser(request)
+            idUsuarioFirebase = authUser.uid
+
+            // TODO: Enviar link de redefinição de senha do Firebase
+            // val link = firebaseAuth.generatePasswordResetLink(email)
+            // Enviar 'link' por email
+
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Falha ao criar usuário no Firebase Auth: ${e.message}")
+        }
+
+        val newUserLocal = User(
+            idUsuario = idUsuarioFirebase,
+            email = email,
+            role = role
+        )
+        val usuarioSalvoLocal = userRepository.salvar(newUserLocal)
+
+        try {
+            when(role){
+                Role.PROFISSIONAL -> {
+                    if (areaAtuacaoId.isBlank()) {
+                        throw IllegalArgumentException("areaAtuacaoId é obrigatória para profissionais.")
+                    }
+                    areaAtuacaoRepository.buscarPorId(areaAtuacaoId)
+                        ?: throw IllegalArgumentException("Area de Atuação não encontrada.")
+
+                    val novoProfissional = Profissional(
+                        nomeProfissional = nome,
+                        userId = usuarioSalvoLocal.idUsuario,
+                        areaAtuacaoId = areaAtuacaoId,
+                        agenda = Agenda(mutableListOf(), mutableListOf()),
+                        atributosEspecificos = atributos ?: emptyMap(),
+                        conviteToken = token,
+                        status = StatusUsuario.CONVIDADO
+                    )
+                    profissionalRepository.salvar(novoProfissional)
                 }
-                val novaAgenda = Agenda(mutableListOf(), mutableListOf())
-                val novoProfissional = Profissional(
-                    nomeProfissional = nome,
-                    userId = usuarioSalvo.idUsuario,
-                    areaAtuacaoId = areaAtuacaoId,
-                    agenda = novaAgenda,
-                    atributosEspecificos = atributos ?: emptyMap(),
-                    conviteToken = token
-                )
-                profissionalRepository.salvar(novoProfissional)
+                Role.RECEPCIONISTA -> {
+                    val novaRecepcionista = Recepcionista(
+                        nomeRecepcionista = nome,
+                        userId = usuarioSalvoLocal.idUsuario,
+                        conviteToken = token,
+                        status = StatusUsuario.CONVIDADO
+                    )
+                    recepcionistaRepository.salvar(novaRecepcionista)
+                }
+                else -> {}
             }
-            Role.RECEPCIONISTA -> {
-                val novaRecepcionista = Recepcionista(
-                    nomeRecepcionista = nome,
-                    userId = usuarioSalvo.idUsuario,
-                    conviteToken = token
-                )
-                recepcionistaRepository.salvar(novaRecepcionista)
+        } catch (e: Exception) {
+            userRepository.deletarPorId(usuarioSalvoLocal.idUsuario)
+            try {
+                firebaseAuth.deleteUser(usuarioSalvoLocal.idUsuario)
+            } catch (authError: Exception) {
             }
-            else -> {}
+            throw e
         }
 
         TODO("Local para disparar e-mail contendo o link com o token para o email do convidado")
 
-        return usuarioSalvo
+        return usuarioSalvoLocal
     }
 
     suspend fun completarCadastro(token: String, senhaNova: String): User {
@@ -138,10 +149,16 @@ class UsuarioService(private val userRepository: UserRepository,
         }
 
         val userEncontrado = userRepository.buscarPorId(perfilUserId)
-            ?: throw IllegalStateException("Usuário associado ao perfil não encontrado.")
+            ?: throw IllegalStateException("Usuário associado ao perfil não encontrado no DB local.")
 
-        userEncontrado.senhaHash = HashingUtil.hashSenha(senhaNova)
-        val usuarioAtualizado = userRepository.atualizar(userEncontrado)
+        try {
+            val request = UserRecord.UpdateRequest(userEncontrado.idUsuario)
+                .setPassword(senhaNova)
+            firebaseAuth.updateUser(request)
+
+        } catch (e: Exception) {
+            throw Exception("Falha ao atualizar senha no Firebase Auth: ${e.message}")
+        }
 
         when (perfil) {
             is Profissional -> {
@@ -156,7 +173,7 @@ class UsuarioService(private val userRepository: UserRepository,
             }
         }
 
-        return usuarioAtualizado
+        return userEncontrado
     }
 
     @OptIn(ExperimentalTime::class)
@@ -168,11 +185,28 @@ class UsuarioService(private val userRepository: UserRepository,
         if (usuarioLogado.role == Role.PACIENTE) {
             throw SecurityException("Pacientes não podem pré-cadastrar outros pacientes.")
         }
+        if (userRepository.buscarPorEmail(email) != null) {
+            throw IllegalArgumentException("Este email já está em uso.")
+        }
 
-        val senhaTemporaria = HashingUtil.hashSenha(UUID.randomUUID().toString())
+        var idUsuarioFirebase: String? = null
+
+        try {
+            val request = UserRecord.CreateRequest()
+                .setEmail(email)
+                .setEmailVerified(false)
+                .setDisabled(false)
+
+            val authUser = firebaseAuth.createUser(request)
+            idUsuarioFirebase = authUser.uid
+
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Falha ao criar usuário no Firebase Auth: ${e.message}")
+        }
+
         val newUser = User(
+            idUsuario = idUsuarioFirebase,
             email = email,
-            senhaHash = senhaTemporaria,
             role = Role.PACIENTE
         )
         val usuarioSalvo = userRepository.salvar(newUser)
@@ -186,7 +220,9 @@ class UsuarioService(private val userRepository: UserRepository,
 
         val pacienteSalvo = pacienteRepository.salvar(newPaciente)
 
-        TODO("Disparar e-mail para o paciente (email) com link para definir a senha")
+        val link = firebaseAuth.generatePasswordResetLink(email)
+
+        TODO("Disparar e-mail para o paciente (email) com link para definir a senha acima")
 
         return pacienteSalvo
     }
@@ -275,7 +311,7 @@ class UsuarioService(private val userRepository: UserRepository,
             throw SecurityException("Somente SuperAdmins podem deletar usuários")
         }
 
-        val userAlvo = userRepository.buscarPorId(userIdAlvo)
+        val userAlvo = userRepository.buscarPorId(userIdAlvo, incluirDeletados = true)
             ?: throw IllegalArgumentException("Usuário alvo não encontrado.")
 
         val emailOriginal = userAlvo.email
@@ -311,7 +347,6 @@ class UsuarioService(private val userRepository: UserRepository,
 
         if (!userAlvo.isDeletado) {
             userAlvo.email = "deleted_${userAlvo.idUsuario}@deleted.user"
-            userAlvo.senhaHash = UUID.randomUUID().toString()
             userAlvo.isDeletado = true
             userRepository.atualizar(userAlvo)
         }
@@ -322,9 +357,12 @@ class UsuarioService(private val userRepository: UserRepository,
             }
         }
 
-        userRepository.deletarPorId(userAlvo.idUsuario)
+        try {
+            firebaseAuth.deleteUser(userIdAlvo)
+        } catch (e: Exception) {
+            println("AVISO: Falha ao deletar usuário $userIdAlvo do Firebase Auth: ${e.message}")
+        }
 
-        // TODO: Invalidar tokens de sessão/autenticação deste usuário, se houver.
     }
 
     suspend fun desbloquearEmailPaciente(
@@ -382,6 +420,34 @@ class UsuarioService(private val userRepository: UserRepository,
             }
             else -> {}
         }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    suspend fun criarPerfilPacienteAposAuth(userId: String, nome: String, email: String): Paciente {
+        if (userRepository.buscarPorId(userId) != null) {
+            throw IllegalStateException("Usuário já existe no DB local.")
+        }
+        if (pacienteRepository.buscarPorUserId(userId) != null) {
+            throw IllegalStateException("Perfil de paciente já existe para este usuário.")
+        }
+        if (emailBlocklistRepository.buscarPorEmail(email) != null) {
+            throw EmailBloqueadoException("Este email está bloqueado.")
+        }
+
+        val newUser = User(
+            idUsuario = userId,
+            email = email,
+            role = Role.PACIENTE
+        )
+        userRepository.salvar(newUser) //
+
+        val newPaciente = Paciente(
+            nomePaciente = nome,
+            userId = userId,
+            status = StatusUsuario.ATIVO
+        )
+        newPaciente.dataCadastro = Clock.System.now().toLocalDateTime(fusoHorarioPadrao) //
+        return pacienteRepository.salvar(newPaciente) //
     }
 
 }

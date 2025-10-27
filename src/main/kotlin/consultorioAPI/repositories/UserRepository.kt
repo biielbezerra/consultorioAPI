@@ -8,7 +8,7 @@ interface UserRepository {
 
     suspend fun atualizar(user: User): User
 
-    suspend fun buscarPorId(id: String): User?
+    suspend fun buscarPorId(id: String, incluirDeletados: Boolean = false): User?
 
     suspend fun deletarPorId(id: String)
 

@@ -6,6 +6,7 @@ import com.consultorioAPI.models.HorarioTrabalho
 import com.consultorioAPI.models.Profissional
 import com.consultorioAPI.models.Role
 import com.consultorioAPI.models.User
+import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
 import kotlinx.datetime.*
 import kotlin.time.Clock
@@ -15,7 +16,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-class AgendaService(private val profissionalRepository: ProfissionalRepository) {
+class AgendaService(private val profissionalRepository: ProfissionalRepository){
 
     suspend fun gerarDisponibilidadePadrao(
         agenda: Agenda,

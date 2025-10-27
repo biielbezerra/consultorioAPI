@@ -38,3 +38,5 @@ out/
 # Arquivos de configuração de ambiente local
 local.yaml
 *.env
+.env
+.idea/runConfigurations/

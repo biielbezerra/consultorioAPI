@@ -18,7 +18,11 @@ class SupabaseUserRepository : UserRepository {
 
     override suspend fun atualizar(user: User): User {
         return table.update(
-            value = user
+            {
+                set("email", user.email)
+                set("role", user.role.name)
+                set("isDeletado", user.isDeletado)
+            }
         ) {
             select()
             filter {
@@ -27,7 +31,7 @@ class SupabaseUserRepository : UserRepository {
         }.decodeSingle()
     }
 
-    override suspend fun buscarPorId(id: String): User? {
+    override suspend fun buscarPorId(id: String, incluirDeletados: Boolean): User? {
         return table.select {
             filter {
                 eq("idUsuario", id)
@@ -40,6 +44,7 @@ class SupabaseUserRepository : UserRepository {
         return table.select {
             filter {
                 eq("email", email)
+                eq("isDeletado", false)
             }
         }.decodeAsOrNull<User>()
     }

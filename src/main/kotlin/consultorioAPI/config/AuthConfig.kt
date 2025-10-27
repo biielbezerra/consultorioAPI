@@ -1,37 +1,37 @@
 package com.consultorioAPI.config
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
+import com.google.firebase.auth.FirebaseAuth
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.http.auth.*
 
-val jwtSecret = System.getenv("SUPABASE_JWT_SECRET") ?: throw IllegalStateException("SUPABASE_JWT_SECRET não definida.")
-val jwtIssuer = System.getenv("SUPABASE_URL") ?: "https://<SEU-ID-DE-PROJETO>.supabase.co"
-val jwtAudience = "authenticated"
-val jwtRealm = "Consultorio API"
+data class FirebasePrincipal(
+    val uid: String,
+    val email: String?
+)
 
 fun Application.configureSecurity() {
     install(Authentication) {
-        jwt("auth-jwt") {
-            realm = jwtRealm
-            verifier(
-                JWT
-                    .require(Algorithm.HMAC256(jwtSecret))
-                    .withAudience(jwtAudience)
-                    .withIssuer(jwtIssuer)
-                    .build()
-            )
+        jwt("auth-firebase") {
+            realm = "Consultorio API Access"
+
             validate { credential ->
-                val userId = credential.payload.subject
-                if (userId != null) {
-                    UserIdPrincipal(userId)
-                } else {
+                val token = credential.payload.toString()
+                if (token.isBlank()) {
+                    return@validate null
+                }
+
+                try {
+                    val decodedToken = FirebaseAuth.getInstance().verifyIdToken(token)
+
+                    FirebasePrincipal(decodedToken.uid, decodedToken.email)
+                } catch (e: Exception) {
+                    // Token inválido, expirado ou com assinatura errada
+                    println("Erro na validação do token: ${e.message}")
                     null
                 }
             }
         }
     }
 }
-
-data class UserIdPrincipal(val userId: String) : Principal
