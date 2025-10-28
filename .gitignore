@@ -42,3 +42,4 @@ local.yaml
 *.env
 .env
 .idea/runConfigurations/
+src/main/resources/firebase-service-account.json

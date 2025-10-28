@@ -35,7 +35,9 @@ class SupabaseUserRepository : UserRepository {
         return table.select {
             filter {
                 eq("idUsuario", id)
-                eq("isDeletado", false)
+                if (!incluirDeletados) {
+                    eq("isDeletado", false)
+                }
             }
         }.decodeAsOrNull<User>()
     }

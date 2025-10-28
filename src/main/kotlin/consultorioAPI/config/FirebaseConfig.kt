@@ -3,6 +3,7 @@ package com.consultorioAPI.config
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import io.github.cdimascio.dotenv.dotenv
 import java.io.FileInputStream
 import java.io.ByteArrayInputStream
 
@@ -13,9 +14,8 @@ object FirebaseConfig {
             println("Firebase Admin SDK já inicializado.")
             return
         }
-        val serviceAccountJson = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-
-        val serviceAccountPath = System.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+        val serviceAccountJson = dotenv()["FIREBASE_SERVICE_ACCOUNT_JSON"]
+        val serviceAccountPath = dotenv()["FIREBASE_SERVICE_ACCOUNT_PATH"]
 
         val credentials = when {
             serviceAccountJson != null && serviceAccountJson.isNotBlank() -> {

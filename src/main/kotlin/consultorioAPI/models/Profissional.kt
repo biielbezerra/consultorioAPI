@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Profissional(
-    val idProfissionalArg: String? = null,
+    val idProfissional: String = "",
     val nomeProfissional: String,
     val userId: String,
     val areaAtuacaoId: String,
@@ -19,9 +19,7 @@ data class Profissional(
     var conviteToken: String? = null,
     var promocoesAtivadasIds: List<String> = emptyList(),
     var isDeletado: Boolean = false
-) {
-    val idProfissional: String = idProfissionalArg ?: UUID.randomUUID().toString()
-}
+)
 
 @Serializable
 data class HorarioTrabalho(

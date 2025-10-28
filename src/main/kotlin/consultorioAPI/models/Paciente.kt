@@ -1,17 +1,17 @@
 package com.consultorioAPI.models
 
-import kotlinx.datetime.LocalDateTime
-import java.util.UUID
 import kotlinx.serialization.Serializable
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
+@OptIn(ExperimentalTime::class)
 @Serializable
 data class Paciente(
-    val idPacienteArg: String? = null,
+    val idPaciente: String = "",
     val nomePaciente: String,
     val userId: String,
     var status: StatusUsuario = StatusUsuario.ATIVO,
     var isDeletado: Boolean = false
 ) {
-    val idPaciente: String = idPacienteArg ?: UUID.randomUUID().toString()
-    var dataCadastro: LocalDateTime? = null
+    var dataCadastro: Instant? = null
 }

@@ -13,6 +13,7 @@ import io.github.jan.supabase.exceptions.BadRequestRestException
 import kotlinx.datetime.toLocalDateTime
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.time.Clock.*
 import kotlin.time.ExperimentalTime
 
 class UsuarioService(private val userRepository: UserRepository,
@@ -72,7 +73,8 @@ class UsuarioService(private val userRepository: UserRepository,
         val newUserLocal = User(
             idUsuario = idUsuarioFirebase,
             email = email,
-            role = role
+            role = role,
+            status = StatusUsuario.CONVIDADO
         )
         val usuarioSalvoLocal = userRepository.salvar(newUserLocal)
 
@@ -160,6 +162,9 @@ class UsuarioService(private val userRepository: UserRepository,
             throw Exception("Falha ao atualizar senha no Firebase Auth: ${e.message}")
         }
 
+        userEncontrado.status = StatusUsuario.ATIVO
+        userRepository.atualizar(userEncontrado)
+
         when (perfil) {
             is Profissional -> {
                 perfil.status = StatusUsuario.ATIVO
@@ -216,7 +221,7 @@ class UsuarioService(private val userRepository: UserRepository,
             userId = usuarioSalvo.idUsuario,
             status = StatusUsuario.ATIVO
         )
-        newPaciente.dataCadastro = Clock.System.now().toLocalDateTime(fusoHorarioPadrao)
+        newPaciente.dataCadastro = Clock.System.now()
 
         val pacienteSalvo = pacienteRepository.salvar(newPaciente)
 
@@ -230,6 +235,7 @@ class UsuarioService(private val userRepository: UserRepository,
     suspend fun recusarConvite(token: String) {
         val profissional = profissionalRepository.buscarPorToken(token)
         val recepcionista = recepcionistaRepository.buscarPorToken(token)
+        val userAlvo = userRepository.buscarPorId(profissional?.userId ?: recepcionista?.userId ?: "")
 
         when {
             profissional != null -> {
@@ -239,6 +245,10 @@ class UsuarioService(private val userRepository: UserRepository,
                 profissional.status = StatusUsuario.RECUSADO
                 profissional.conviteToken = null
                 profissionalRepository.atualizar(profissional)
+                if (userAlvo != null) {
+                    userAlvo.status = StatusUsuario.RECUSADO
+                    userRepository.atualizar(userAlvo)
+                }
             }
             recepcionista != null -> {
                 if (recepcionista.status != StatusUsuario.CONVIDADO) {
@@ -247,10 +257,75 @@ class UsuarioService(private val userRepository: UserRepository,
                 recepcionista.status = StatusUsuario.RECUSADO
                 recepcionista.conviteToken = null
                 recepcionistaRepository.atualizar(recepcionista)
+                if (userAlvo != null) {
+                    userAlvo.status = StatusUsuario.RECUSADO
+                    userRepository.atualizar(userAlvo)
+                }
             }
             else -> {
                 throw IllegalArgumentException("Convite inválido ou expirado.")
             }
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    suspend fun registrarNovoPaciente(dto: consultorioAPI.dtos.RegistroPacienteRequest): Paciente {
+
+        if (dto.senha.length < 6) {
+            throw IllegalArgumentException("A senha deve ter pelo menos 6 caracteres.")
+        }
+
+        if (emailBlocklistRepository.buscarPorEmail(dto.email) != null) {
+            throw EmailBloqueadoException("Este email está bloqueado.")
+        }
+        if (userRepository.buscarPorEmail(dto.email) != null) {
+            throw IllegalArgumentException("Este email já está em uso.")
+        }
+
+        var idUsuarioFirebase: String? = null
+        try {
+            val request = UserRecord.CreateRequest()
+                .setEmail(dto.email)
+                .setEmailVerified(false)
+                .setPassword(dto.senha)
+                .setDisplayName(dto.nome)
+                .setDisabled(false)
+
+            val authUser = firebaseAuth.createUser(request)
+            idUsuarioFirebase = authUser.uid
+
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Falha ao criar usuário no Firebase: ${e.message}")
+        }
+
+        try {
+            val newUser = User(
+                idUsuario = idUsuarioFirebase,
+                email = dto.email,
+                role = Role.PACIENTE,
+                status = StatusUsuario.ATIVO
+            )
+            userRepository.salvar(newUser)
+
+            val newPaciente = Paciente(
+                nomePaciente = dto.nome,
+                userId = idUsuarioFirebase,
+                status = StatusUsuario.ATIVO
+            )
+            newPaciente.dataCadastro = Clock.System.now()
+
+            return pacienteRepository.salvar(newPaciente)
+
+        } catch (e: Exception) {
+            try {
+                if (idUsuarioFirebase != null) {
+                    firebaseAuth.deleteUser(idUsuarioFirebase)
+                    println("Rollback no Firebase realizado para usuário: $idUsuarioFirebase")
+                }
+            } catch (authError: Exception) {
+                println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar usuário $idUsuarioFirebase do Firebase: ${authError.message}")
+            }
+            throw IllegalStateException("Falha ao salvar perfil local, registro desfeito. Tente novamente.")
         }
     }
 
@@ -401,6 +476,11 @@ class UsuarioService(private val userRepository: UserRepository,
             throw IllegalArgumentException("Não é possível definir o status para CONVIDADO manualmente.")
         }
 
+        if (userAlvo.status != novoStatus) {
+            userAlvo.status = novoStatus
+            userRepository.atualizar(userAlvo)
+        }
+
         when (userAlvo.role) {
             Role.PROFISSIONAL -> {
                 val perfil = profissionalRepository.buscarPorUserId(userAlvo.idUsuario)
@@ -446,8 +526,8 @@ class UsuarioService(private val userRepository: UserRepository,
             userId = userId,
             status = StatusUsuario.ATIVO
         )
-        newPaciente.dataCadastro = Clock.System.now().toLocalDateTime(fusoHorarioPadrao) //
-        return pacienteRepository.salvar(newPaciente) //
+        newPaciente.dataCadastro = Clock.System.now()
+        return pacienteRepository.salvar(newPaciente)
     }
 
 }

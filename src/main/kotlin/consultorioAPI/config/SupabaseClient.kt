@@ -1,5 +1,6 @@
 package com.consultorioAPI.config
 
+import io.github.cdimascio.dotenv.dotenv
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
@@ -11,11 +12,13 @@ val fusoHorarioPadrao = TimeZone.UTC
 
 object SupabaseConfig {
 
-    private val SUPABASE_URL = System.getenv("SUPABASE_URL")
-        ?: throw IllegalStateException("Variável de ambiente SUPABASE_URL não definida.")
+    private val dotenv = dotenv()
 
-    private val SUPABASE_SERVICE_KEY = System.getenv("SUPABASE_SERVICE_KEY")
-        ?: throw IllegalStateException("Variável de ambiente SUPABASE_SERVICE_KEY não definida.")
+    private val SUPABASE_URL = dotenv["SUPABASE_URL"]
+        ?: throw IllegalStateException("Variável 'SUPABASE_URL' não definida no .env.")
+
+    private val SUPABASE_SERVICE_KEY = dotenv["SUPABASE_SERVICE_KEY"]
+        ?: throw IllegalStateException("Variável 'SUPABASE_SERVICE_KEY' não definida no .env.")
 
     val client: SupabaseClient = createSupabaseClient(
         supabaseUrl = SUPABASE_URL,
