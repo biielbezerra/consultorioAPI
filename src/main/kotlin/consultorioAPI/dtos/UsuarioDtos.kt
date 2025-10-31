@@ -51,3 +51,23 @@ data class RegistroPacienteRequest(
     val email: String,
     val senha: String
 )
+
+data class AtualizarMeuPerfilRequest(
+    val nome: String? = null,
+    val telefone: String? = null
+)
+
+@Serializable
+data class AtualizarMinhaSenhaRequest(
+    val novaSenha: String
+)
+
+@Serializable
+data class LinkarPerfilRequest(
+    val userId: String,
+    val role: Role,
+
+    val nome: String,
+    val areaAtuacaoId: String? = null,
+    val atributos: Map<String, String>? = null
+)

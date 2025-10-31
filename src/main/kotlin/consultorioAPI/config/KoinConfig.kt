@@ -28,7 +28,20 @@ val serviceModule = module {
     single { PromocaoService(get<PromocaoRepository>(), get<ConsultaRepository>(), get<PacienteService>(), get<ProfissionalRepository>()) }
     single { ProfissionalService(get<ProfissionalRepository>(), get<PromocaoRepository>(), get<AgendaService>()) }
     single { ConsultaService(get<PacienteService>(), get<ConsultaRepository>(), get<PacienteRepository>(), get<ProfissionalRepository>()) }
-    single { UsuarioService(get<UserRepository>(), get<PacienteRepository>(), get<ProfissionalRepository>(), get<RecepcionistaRepository>(), get<AgendaService>(), get<AreaAtuacaoRepository>(), get<EmailBlocklistRepository>()) }
+
+    single<UsuarioService> {
+        UsuarioService(
+            get<UserRepository>(),
+            get<PacienteRepository>(),
+            get<ProfissionalRepository>(),
+            get<RecepcionistaRepository>(),
+            get<AgendaService>(),
+            get<AreaAtuacaoRepository>(),
+            get<EmailBlocklistRepository>(),
+            get<ConsultaRepository>()
+        )
+    }
+
     single { ManutencaoService(get<PacienteRepository>(), get<ProfissionalRepository>(), get<PacienteService>(), get<AgendaService>()) }
 
     single {
@@ -73,7 +86,9 @@ val controllerModule = module {
         AdminController(
             get<PromocaoService>(),
             get<ConsultorioService>(),
-            get<ManutencaoService>()
+            get<ManutencaoService>(),
+            get<UsuarioService>(),
+            get<ProfissionalService>()
         )
     }
 }

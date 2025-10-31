@@ -18,7 +18,7 @@ data class Consulta(
     val nomeProfissional: String?,
     val area: String,
     val dataHoraConsulta: LocalDateTime,
-    val statusConsulta: StatusConsulta,
+    var statusConsulta: StatusConsulta,
     var valorBase: Double,
     var valorConsulta: Double,
     var descontoPercentual: Double = 0.0,

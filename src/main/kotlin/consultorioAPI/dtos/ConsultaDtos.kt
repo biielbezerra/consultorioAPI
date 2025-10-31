@@ -24,6 +24,15 @@ data class AgendamentoDuploRequest(
 )
 
 @Serializable
+data class AgendamentoPacoteRequest(
+    val profissionalId: String,
+    val datas: List<LocalDateTime>,
+    val pacienteEmail: String,
+    val pacienteNome: String? = null,
+    val codigoPromocional: String? = null
+)
+
+@Serializable
 data class ReagendamentoRequest(
     val novaData: LocalDateTime
 )

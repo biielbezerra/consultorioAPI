@@ -1,6 +1,7 @@
 package com.consultorioAPI.services
 
 import com.consultorioAPI.config.fusoHorarioPadrao
+import com.consultorioAPI.exceptions.*
 import com.consultorioAPI.models.*
 import com.consultorioAPI.repositories.ProfissionalRepository
 import com.consultorioAPI.repositories.PromocaoRepository
@@ -22,10 +23,10 @@ class ProfissionalService (
         usuarioLogado: User
     ) {
         val profissional = profissionalRepository.buscarPorId(profissionalId)
-            ?: throw NoSuchElementException("Profissional não encontrado.")
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado.")
 
         var permitido = false
-        if (usuarioLogado.role == Role.SUPER_ADMIN) {
+        if (usuarioLogado.isSuperAdmin) {
             permitido = true
         } else if (usuarioLogado.role == Role.PROFISSIONAL) {
             val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
@@ -35,10 +36,10 @@ class ProfissionalService (
         }
 
         if (!permitido) {
-            throw SecurityException("Usuário não autorizado a alterar este valor de consulta.")
+            throw NaoAutorizadoException("Usuário não autorizado a alterar este valor de consulta.")
         }
 
-        if (novoValor <= 0) throw IllegalArgumentException("Valor da consulta deve ser positivo.")
+        if (novoValor <= 0) throw InputInvalidoException("Valor da consulta deve ser positivo.")
 
         profissional.valorBaseConsulta = novoValor
         profissionalRepository.atualizar(profissional)
@@ -51,17 +52,21 @@ class ProfissionalService (
         usuarioLogado: User
     ) {
         val profissional = profissionalRepository.buscarPorId(profissionalId)
-            ?: throw NoSuchElementException("Profissional não encontrado.")
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado.")
 
-        when (usuarioLogado.role) {
-            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {}
-            Role.PROFISSIONAL -> {
-                val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                if (perfilLogado?.idProfissional != profissionalId) {
-                    throw SecurityException("Profissionais só podem configurar sua própria agenda.")
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
+            // OK
+        } else {
+            when (usuarioLogado.role) {
+                Role.PROFISSIONAL -> {
+                    val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                    if (perfilLogado?.idProfissional != profissionalId) {
+                        throw NaoAutorizadoException("Profissionais só podem configurar sua própria agenda.")
+                    }
                 }
+                Role.PACIENTE -> throw NaoAutorizadoException("Pacientes não podem configurar agendas.")
+                else -> {}
             }
-            Role.PACIENTE -> throw SecurityException("Pacientes não podem configurar agendas.")
         }
 
         profissional.diasDeTrabalho = novasRegras
@@ -87,7 +92,7 @@ class ProfissionalService (
         usuarioLogado: User
     ): List<Promocao> {
         val profissional = profissionalRepository.buscarPorId(profissionalId)
-            ?: throw NoSuchElementException("Profissional não encontrado.")
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado.")
 
         val agora = Clock.System.now()
         val globais = promocaoRepository.buscarAtivasPorData(agora)
@@ -109,15 +114,17 @@ class ProfissionalService (
         usuarioLogado: User
     ) {
         val profissional = profissionalRepository.buscarPorId(profissionalId)
-            ?: throw NoSuchElementException("Profissional não encontrado.")
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado.")
+
         val promocao = promocaoRepository.buscarPorId(promocaoId)
-            ?: throw NoSuchElementException("Promoção não encontrada.")
+            ?: throw RecursoNaoEncontradoException("Promoção não encontrada.")
 
         if (promocao.escopo == PromocaoEscopo.PROFISSIONAL && promocao.profissionalIdAplicavel != profissionalId) {
-            throw IllegalArgumentException("Esta promoção não pode ser ativada por este profissional.")
+            throw NaoAutorizadoException("Esta promoção não pode ser ativada por este profissional.")
         }
+
         if (!promocao.isAtiva || promocao.isDeletado) {
-            throw IllegalArgumentException("Esta promoção não está ativa.")
+            throw ConflitoDeEstadoException("Esta promoção não está ativa.")
         }
 
         if (!profissional.promocoesAtivadasIds.contains(promocaoId)) {
@@ -132,12 +139,20 @@ class ProfissionalService (
         usuarioLogado: User
     ) {
         val profissional = profissionalRepository.buscarPorId(profissionalId)
-            ?: throw NoSuchElementException("Profissional não encontrado.")
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado.")
 
         if (profissional.promocoesAtivadasIds.contains(promocaoId)) {
             profissional.promocoesAtivadasIds = profissional.promocoesAtivadasIds.filterNot { it == promocaoId }
             profissionalRepository.atualizar(profissional)
         }
+    }
+
+    suspend fun listarProfissionaisAtivos(usuarioLogado: User): List<Profissional> {
+        if (!usuarioLogado.isSuperAdmin && usuarioLogado.role != Role.RECEPCIONISTA) {
+            throw NaoAutorizadoException("Apenas Admins ou Recepcionistas podem listar todos os profissionais.")
+        }
+
+        return profissionalRepository.listarTodosAtivos()
     }
 
 }

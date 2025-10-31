@@ -15,11 +15,18 @@ data class CriarPromocaoRequest(
     val tipoPromocao: TipoPromocao,
     val codigoOpcional: String? = null,
     val profissionalIdAplicavel: String? = null,
-    val isCumulativa: Boolean = false
+    val isCumulativa: Boolean = false,
+    val quantidadeMinima: Int? = null
 )
 
 @Serializable
 data class CriarConsultorioRequest(
     val nome: String,
     val endereco: String
+)
+
+@Serializable
+data class TransferirAdminRequest(
+    val novoEmail: String,
+    val excluirContaAntiga: Boolean
 )

@@ -1,5 +1,6 @@
 package com.consultorioAPI.services
 
+import com.consultorioAPI.exceptions.*
 import com.consultorioAPI.models.*
 import com.consultorioAPI.repositories.*
 import kotlin.time.Clock
@@ -23,37 +24,52 @@ class PromocaoService(
         codigoOpcional: String? = null,
         profissionalIdAplicavel: String? = null,
         isCumulativa: Boolean = false,
+        quantidadeMinima: Int? = null,
         usuarioLogado: User
     ): Promocao {
+
+        if (tipoPromocao == TipoPromocao.PACOTE) {
+            if (quantidadeMinima == null || quantidadeMinima <= 1) {
+                throw InputInvalidoException("Promoções do tipo PACOTE devem ter uma quantidade mínima de consultas maior que 1.")
+            }
+        } else if (quantidadeMinima != null) {
+            throw InputInvalidoException("Apenas promoções do tipo PACOTE podem ter uma quantidade mínima de consultas.")
+        }
+
         if (percentualDesconto <= 0 || percentualDesconto > 100) {
-            throw IllegalArgumentException("Percentual de desconto inválido.")
+            throw InputInvalidoException("Percentual de desconto inválido.")
         }
         if (dataInicio >= dataFim) {
-            throw IllegalArgumentException("Data de início deve ser anterior à data de fim.")
+            throw InputInvalidoException("Data de início deve ser anterior à data de fim.")
         }
         if (tipoPromocao == TipoPromocao.CODIGO && codigoOpcional.isNullOrBlank()) {
-            throw IllegalArgumentException("Promoções do tipo CÓDIGO devem ter um código.")
+            throw InputInvalidoException("Promoções do tipo CÓDIGO devem ter um código.")
         }
         if (tipoPromocao != TipoPromocao.CODIGO && !codigoOpcional.isNullOrBlank()) {
-            throw IllegalArgumentException("Apenas promoções do tipo CÓDIGO podem ter um código opcional.")
+            throw InputInvalidoException("Apenas promoções do tipo CÓDIGO podem ter um código opcional.")
         }
 
         val escopoPromocao: PromocaoEscopo
         var idProfissionalFinal: String? = null
 
-        when (usuarioLogado.role) {
-            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {
-                escopoPromocao = PromocaoEscopo.GLOBAL
-                idProfissionalFinal = profissionalIdAplicavel
-            }
-            Role.PROFISSIONAL -> {
-                escopoPromocao = PromocaoEscopo.PROFISSIONAL
-                val perfilProfissional = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                    ?: throw SecurityException("Perfil profissional não encontrado para este usuário.")
-                idProfissionalFinal = perfilProfissional.idProfissional
-            }
-            Role.PACIENTE -> {
-                throw SecurityException("Pacientes não podem criar promoções.")
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
+            escopoPromocao = PromocaoEscopo.GLOBAL
+            idProfissionalFinal = profissionalIdAplicavel
+        } else {
+            when (usuarioLogado.role) {
+                Role.PROFISSIONAL -> {
+                    escopoPromocao = PromocaoEscopo.PROFISSIONAL
+                    val perfilProfissional = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                        ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado para este usuário.")
+                    idProfissionalFinal = perfilProfissional.idProfissional
+                }
+                Role.PACIENTE -> {
+                    throw NaoAutorizadoException("Pacientes não podem criar promoções.")
+                }
+                else -> {
+                    escopoPromocao = PromocaoEscopo.GLOBAL
+                    idProfissionalFinal = profissionalIdAplicavel
+                }
             }
         }
 
@@ -67,6 +83,7 @@ class PromocaoService(
             profissionalIdAplicavel = idProfissionalFinal,
             criadoPorUserId = usuarioLogado.idUsuario,
             escopo = escopoPromocao,
+            quantidadeMinimaConsultas = quantidadeMinima,
             isCumulativa = isCumulativa
         )
 
@@ -102,7 +119,11 @@ class PromocaoService(
             when (promo.tipoPromocao) {
                 TipoPromocao.PRIMEIRA_DUPLA -> consultasAnteriores.isEmpty() && quantidadeConsultasSimultaneas >= 2
                 TipoPromocao.CLIENTE_FIEL -> isFiel
-                TipoPromocao.GERAL_PERIODO, TipoPromocao.CODIGO -> true // Validadas por data/código/ativação
+                TipoPromocao.PACOTE -> {
+                    promo.quantidadeMinimaConsultas != null &&
+                            quantidadeConsultasSimultaneas >= promo.quantidadeMinimaConsultas!!
+                }
+                TipoPromocao.GERAL_PERIODO, TipoPromocao.CODIGO -> true
             }
         }
 

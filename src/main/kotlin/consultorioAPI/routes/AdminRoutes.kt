@@ -46,6 +46,15 @@ fun Routing.adminRoutes() {
             get("/emails/bloqueados") {
                 usuarioController.listarEmailsBloqueados(call)
             }
+            post("/usuarios/linkar-perfil") {
+                adminController.linkarPerfil(call)
+            }
+            post("/transferir-propriedade") {
+                adminController.transferirSuperAdmin(call)
+            }
+            get("/profissionais") {
+                adminController.listarProfissionais(call)
+            }
         }
     }
 }

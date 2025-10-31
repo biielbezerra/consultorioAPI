@@ -51,6 +51,15 @@ class SupabaseUserRepository : UserRepository {
         }.decodeAsOrNull<User>()
     }
 
+    override suspend fun buscarPorToken(token: String): User? {
+        return table.select {
+            filter {
+                eq("convite_token", token)
+                eq("isDeletado", false)
+            }
+        }.decodeAsOrNull<User>()
+    }
+
     override suspend fun deletarPorId(id: String) {
         table.delete {
             filter {

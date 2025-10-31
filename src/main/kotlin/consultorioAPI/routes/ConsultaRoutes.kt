@@ -22,6 +22,10 @@ fun Routing.consultaRoutes() {
                 consultaController.agendarConsultaDupla(call)
             }
 
+            post("/pacote") {
+                consultaController.agendarPacote(call)
+            }
+
             // PUT /consultas/{id}/reagendar
             put("/{id}/reagendar") {
                 consultaController.reagendarConsulta(call)

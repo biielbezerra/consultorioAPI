@@ -21,8 +21,6 @@ interface ProfissionalRepository {
 
     suspend fun listarTodosAtivos(): List<Profissional>
 
-    suspend fun buscarPorToken(token: String): Profissional?
-
     suspend fun deletarPorId(id: String)
 
 }

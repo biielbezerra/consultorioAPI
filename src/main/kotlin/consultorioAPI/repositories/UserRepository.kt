@@ -14,4 +14,6 @@ interface UserRepository {
 
     suspend fun buscarPorEmail(email: String): User?
 
+    suspend fun buscarPorToken(token: String): User?
+
 }

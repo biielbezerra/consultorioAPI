@@ -6,9 +6,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Recepcionista(
     val idRecepcionista: String = "",
-    val nomeRecepcionista: String,
+    var nomeRecepcionista: String,
+    var telefone: String? = null,
     val userId: String,
     var status: StatusUsuario = StatusUsuario.CONVIDADO,
-    var conviteToken: String? = null,
     var isDeletado: Boolean = false
 )

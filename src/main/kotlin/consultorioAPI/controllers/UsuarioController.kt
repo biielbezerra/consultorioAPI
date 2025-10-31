@@ -2,6 +2,8 @@ package consultorioAPI.controllers
 
 import com.consultorioAPI.config.FirebasePrincipal
 import com.consultorioAPI.exceptions.EmailBloqueadoException
+import com.consultorioAPI.exceptions.InputInvalidoException
+import com.consultorioAPI.exceptions.NaoAutorizadoException
 import consultorioAPI.dtos.AtualizarStatusRequest
 import consultorioAPI.dtos.CompletarCadastroRequest
 import consultorioAPI.dtos.CriarPacienteRequest
@@ -9,6 +11,8 @@ import consultorioAPI.dtos.PreCadastroEquipeRequest
 import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.models.User
 import com.consultorioAPI.services.UsuarioService
+import consultorioAPI.dtos.AtualizarMeuPerfilRequest
+import consultorioAPI.dtos.AtualizarMinhaSenhaRequest
 import consultorioAPI.dtos.DeletarUsuarioRequest
 import consultorioAPI.dtos.EmailRequest
 import consultorioAPI.dtos.RecusarConviteRequest
@@ -24,232 +28,136 @@ data class OnboardingRequest(val nome: String)
 
 class UsuarioController(private val usuarioService: UsuarioService) {
 
-    // criarPerfilPacienteAposAuth da UsuarioService
-    suspend fun criarPerfilPaciente(call: ApplicationCall) {
-        try {
-            val principal = call.principal<FirebasePrincipal>()
-                ?: return call.respond(HttpStatusCode.Unauthorized)
-
-            val userEmail = principal.email
-            if (userEmail == null || userEmail.isBlank()) {
-                return call.respond(HttpStatusCode.BadRequest, "Token não contém e-mail válido.")
-            }
-
-            val request = call.receive<OnboardingRequest>()
-
-            val pacienteCriado = usuarioService.criarPerfilPacienteAposAuth(
-                userId = principal.uid,
-                nome = request.nome,
-                email = userEmail
-            )
-
-            call.respond(HttpStatusCode.Created, pacienteCriado)
-
-        } catch (e: IllegalStateException) {
-            call.respond(HttpStatusCode.Conflict, mapOf("erro" to e.message))
-        } catch (e: EmailBloqueadoException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to "Erro inesperado: ${e.message}"))
-        }
-    }
-
     suspend fun registrarPaciente(call: ApplicationCall) {
-        try {
-            val request = call.receive<RegistroPacienteRequest>()
-
-            val pacienteCriado = usuarioService.registrarNovoPaciente(request)
-
-            call.respond(HttpStatusCode.Created, pacienteCriado)
-
-        } catch (e: EmailBloqueadoException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: IllegalStateException) {
-            call.respond(HttpStatusCode.Conflict, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val request = call.receive<RegistroPacienteRequest>()
+        val pacienteCriado = usuarioService.registrarNovoPaciente(request)
+        call.respond(HttpStatusCode.Created, pacienteCriado)
     }
 
     suspend fun preCadastrarEquipe(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>()
-                ?: return call.respond(HttpStatusCode.Unauthorized, "Apenas usuários logados podem fazer isso")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val request = call.receive<PreCadastroEquipeRequest>()
 
-            val request = call.receive<PreCadastroEquipeRequest>()
-
-            val usuarioCriado = usuarioService.preCadastrarEquipe(
-                nome = request.nome,
-                email = request.email,
-                role = request.role,
-                areaAtuacaoId = request.areaAtuacaoId,
-                atributos = request.atributos,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.Created, usuarioCriado)
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val usuarioCriado = usuarioService.preCadastrarEquipe(
+            nome = request.nome,
+            email = request.email,
+            role = request.role,
+            areaAtuacaoId = request.areaAtuacaoId,
+            atributos = request.atributos,
+            usuarioLogado = usuarioLogado
+        )
+        call.respond(HttpStatusCode.Created, usuarioCriado)
     }
 
     suspend fun completarCadastro(call: ApplicationCall) {
-        try {
-            val request = call.receive<CompletarCadastroRequest>()
-
-            val usuarioAtivado = usuarioService.completarCadastro(
-                token = request.token,
-                senhaNova = request.senhaNova
-            )
-            call.respond(HttpStatusCode.OK, usuarioAtivado)
-
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: IllegalStateException) {
-            call.respond(HttpStatusCode.Conflict, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val request = call.receive<CompletarCadastroRequest>()
+        val usuarioAtivado = usuarioService.completarCadastro(request.token, request.senhaNova)
+        call.respond(HttpStatusCode.OK, usuarioAtivado)
     }
 
     suspend fun recusarConvite(call: ApplicationCall) {
-        try {
-            // Esta é uma rota pública, não precisa de autenticação
-            val request = call.receive<RecusarConviteRequest>()
-
-            usuarioService.recusarConvite(request.token)
-
-            call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Convite recusado"))
-
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: IllegalStateException) {
-            call.respond(HttpStatusCode.Conflict, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val request = call.receive<RecusarConviteRequest>()
+        usuarioService.recusarConvite(request.token)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Convite recusado"))
     }
 
     suspend fun reenviarConvite(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val userIdAlvo = call.parameters["id"]
-                ?: return call.respond(HttpStatusCode.BadRequest, "ID do usuário não fornecido")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-            usuarioService.reenviarConvite(
-                userIdAlvo = userIdAlvo,
-                usuarioLogado = usuarioLogado
-            )
+        val userIdAlvo = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do usuário não fornecido")
 
-            call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Convite reenviado"))
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: IllegalStateException) {
-            call.respond(HttpStatusCode.Conflict, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        usuarioService.reenviarConvite(userIdAlvo, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Convite reenviado"))
     }
 
     suspend fun atualizarStatusEquipe(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val userIdAlvo = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do usuário não fornecido")
+
+        val request = call.receive<AtualizarStatusRequest>()
+
+        val novoStatusEnum: StatusUsuario
         try {
-            val usuarioLogado = call.principal<User>()
-                ?: return call.respond(HttpStatusCode.Unauthorized)
-
-            val userIdAlvo = call.parameters["id"]
-                ?: return call.respond(HttpStatusCode.BadRequest, "ID do usuário não fornecido")
-
-            val request = call.receive<AtualizarStatusRequest>()
-
-            val novoStatusEnum = try {
-                StatusUsuario.valueOf(request.novoStatus.uppercase())
-            } catch (e: Exception) {
-                return call.respond(HttpStatusCode.BadRequest, "Status inválido: ${request.novoStatus}")
-            }
-
-            usuarioService.atualizarStatusEquipe(
-                userIdAlvo = userIdAlvo,
-                novoStatus = novoStatusEnum,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Status atualizado"))
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
+            novoStatusEnum = StatusUsuario.valueOf(request.novoStatus.uppercase())
         } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
+            throw InputInvalidoException("Status inválido: ${request.novoStatus}. Valores permitidos: ${StatusUsuario.entries.joinToString()}")
         }
+
+        usuarioService.atualizarStatusEquipe(
+            userIdAlvo = userIdAlvo,
+            novoStatus = novoStatusEnum,
+            usuarioLogado = usuarioLogado
+        )
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Status atualizado"))
+    }
+
+    suspend fun buscarMeuPerfil(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val perfil = usuarioService.buscarMeuPerfil(usuarioLogado)
+        call.respond(HttpStatusCode.OK, perfil)
+    }
+
+    suspend fun atualizarMeuPerfil(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val dto = call.receive<AtualizarMeuPerfilRequest>()
+        val perfilAtualizado = usuarioService.atualizarMeuPerfil(usuarioLogado, dto)
+        call.respond(HttpStatusCode.OK, perfilAtualizado)
+    }
+
+    suspend fun atualizarMinhaSenha(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val dto = call.receive<AtualizarMinhaSenhaRequest>()
+        usuarioService.atualizarMinhaSenha(usuarioLogado, dto)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Senha atualizada com sucesso."))
     }
 
     suspend fun deletarUsuario(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val userIdAlvo = call.parameters["id"]
-                ?: return call.respond(HttpStatusCode.BadRequest, "ID do usuário não fornecido")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-            val request = call.receive<DeletarUsuarioRequest>()
+        val userIdAlvo = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do usuário não fornecido")
 
-            usuarioService.deletarUsuario(
-                userIdAlvo = userIdAlvo,
-                usuarioLogado = usuarioLogado,
-                bloquearEmail = request.bloquearEmail
-            )
+        val request = call.receive<DeletarUsuarioRequest>()
 
-            call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Usuário deletado"))
+        usuarioService.deletarUsuario(userIdAlvo, usuarioLogado, request.bloquearEmail)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Usuário deletado"))
+    }
 
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+    suspend fun deletarMinhaConta(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        usuarioService.deletarMinhaConta(usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Sua conta foi excluída com sucesso."))
     }
 
     suspend fun desbloquearEmail(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val request = call.receive<EmailRequest>()
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-            usuarioService.desbloquearEmailPaciente(
-                emailAlvo = request.email,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Email ${request.email} desbloqueado"))
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val request = call.receive<EmailRequest>()
+        usuarioService.desbloquearEmailPaciente(request.email, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Email ${request.email} desbloqueado"))
     }
 
     suspend fun listarEmailsBloqueados(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-            val emails = usuarioService.listarEmailsBloqueados(usuarioLogado)
-
-            call.respond(HttpStatusCode.OK, emails)
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val emails = usuarioService.listarEmailsBloqueados(usuarioLogado)
+        call.respond(HttpStatusCode.OK, emails)
     }
 }

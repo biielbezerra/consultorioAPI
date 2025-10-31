@@ -21,6 +21,7 @@ data class Promocao(
     val profissionalIdAplicavel: String? = null,
     val criadoPorUserId: String,
     val escopo: PromocaoEscopo,
+    var quantidadeMinimaConsultas: Int? = null,
     var isCumulativa: Boolean = false,
     var isAtiva: Boolean = true,
     var isDeletado: Boolean = false
@@ -33,5 +34,6 @@ enum class TipoPromocao {
     PRIMEIRA_DUPLA,
     CLIENTE_FIEL,
     GERAL_PERIODO,
-    CODIGO
+    CODIGO,
+    PACOTE
 }

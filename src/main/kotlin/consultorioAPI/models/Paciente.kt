@@ -9,6 +9,7 @@ import kotlin.time.Instant
 data class Paciente(
     val idPaciente: String = "",
     val nomePaciente: String,
+    var telefone: String? = null,
     val userId: String,
     var status: StatusUsuario = StatusUsuario.ATIVO,
     var isDeletado: Boolean = false

@@ -17,10 +17,6 @@ fun Routing.pacienteRoutes() {
             get("/consultas") {
                 consultaController.listarConsultasPaciente(call)
             }
-
-            // TODO: Adicionar outras rotas específicas do paciente
-            // Ex: GET /pacientes/{id}/perfil
-            //     PUT /pacientes/{id}/perfil
         }
     }
 }

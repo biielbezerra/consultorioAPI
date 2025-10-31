@@ -8,15 +8,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Profissional(
     val idProfissional: String = "",
-    val nomeProfissional: String,
+    var nomeProfissional: String,
+    var telefone: String? = null,
     val userId: String,
     val areaAtuacaoId: String,
-    var valorBaseConsulta: Double = 170.0,
+    var valorBaseConsulta: Double = 200.0,
     var agenda: Agenda,
     var diasDeTrabalho: List<HorarioTrabalho> = emptyList(),
     var status: StatusUsuario = StatusUsuario.CONVIDADO,
     var atributosEspecificos: Map<String, String> = emptyMap(),
-    var conviteToken: String? = null,
     var promocoesAtivadasIds: List<String> = emptyList(),
     var isDeletado: Boolean = false
 )

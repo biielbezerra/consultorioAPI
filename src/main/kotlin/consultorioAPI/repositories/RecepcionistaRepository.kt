@@ -16,8 +16,6 @@ interface RecepcionistaRepository {
 
     suspend fun listarTodos(): List<Recepcionista>
 
-    suspend fun buscarPorToken(token: String): Recepcionista?
-
     suspend fun deletarPorId(id: String)
 
 }

@@ -1,5 +1,8 @@
 package consultorioAPI.controllers
 
+import com.consultorioAPI.exceptions.InputInvalidoException
+import com.consultorioAPI.exceptions.NaoAutorizadoException
+import com.consultorioAPI.exceptions.RecursoNaoEncontradoException
 import consultorioAPI.dtos.*
 import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ProfissionalRepository
@@ -20,190 +23,132 @@ class ProfissionalController(
 ) {
 
     suspend fun atualizarValorConsulta(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
-            val request = call.receive<AtualizarValorRequest>()
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val request = call.receive<AtualizarValorRequest>()
 
-            profissionalService.atualizarValorConsulta(
-                profissionalId = profissionalId,
-                novoValor = request.novoValor,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, "Valor da consulta atualizado")
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: NoSuchElementException) {
-            call.respond(HttpStatusCode.NotFound, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        profissionalService.atualizarValorConsulta(profissionalId, request.novoValor, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Valor da consulta atualizado"))
     }
 
     suspend fun configurarAgenda(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
-            val request = call.receive<ConfigurarAgendaRequest>()
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val request = call.receive<ConfigurarAgendaRequest>()
 
-            profissionalService.configurarHorarioPadraoEGerarAgendaInicial(
-                profissionalId = profissionalId,
-                novasRegras = request.novasRegras,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, "Agenda configurada e horários gerados")
-
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: NoSuchElementException) {
-            call.respond(HttpStatusCode.NotFound, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        profissionalService.configurarHorarioPadraoEGerarAgendaInicial(profissionalId, request.novasRegras, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Agenda configurada e horários gerados"))
     }
 
     suspend fun listarPromocoesDisponiveis(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
 
-            val promocoes = profissionalService.listarPromocoesDisponiveisParaAtivar(
-                profissionalId = profissionalId,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, promocoes)
-
-        } catch (e: NoSuchElementException) {
-            call.respond(HttpStatusCode.NotFound, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val promocoes = profissionalService.listarPromocoesDisponiveisParaAtivar(profissionalId, usuarioLogado)
+        call.respond(HttpStatusCode.OK, promocoes)
     }
 
     suspend fun ativarPromocao(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
-            val promocaoId = call.parameters["promocaoId"] ?: return call.respond(HttpStatusCode.BadRequest, "ID da Promoção não fornecido")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val promocaoId = call.parameters["promocaoId"]
+            ?: throw InputInvalidoException("ID da Promoção não fornecido")
 
-            profissionalService.ativarPromocao(
-                profissionalId = profissionalId,
-                promocaoId = promocaoId,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, "Promoção ativada")
-
-        } catch (e: NoSuchElementException) {
-            call.respond(HttpStatusCode.NotFound, mapOf("erro" to e.message))
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        profissionalService.ativarPromocao(profissionalId, promocaoId, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Promoção ativada"))
     }
 
     suspend fun desativarPromocao(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
-            val promocaoId = call.parameters["promocaoId"] ?: return call.respond(HttpStatusCode.BadRequest, "ID da Promoção não fornecido")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val promocaoId = call.parameters["promocaoId"]
+            ?: throw InputInvalidoException("ID da Promoção não fornecido")
 
-            profissionalService.desativarPromocao(
-                profissionalId = profissionalId,
-                promocaoId = promocaoId,
-                usuarioLogado = usuarioLogado
-            )
-
-            call.respond(HttpStatusCode.OK, "Promoção desativada")
-
-        } catch (e: NoSuchElementException) {
-            call.respond(HttpStatusCode.NotFound, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        profissionalService.desativarPromocao(profissionalId, promocaoId, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Promoção desativada"))
     }
 
     suspend fun definirFolga(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
-            val request = call.receive<DefinirFolgaRequest>()
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val request = call.receive<DefinirFolgaRequest>()
 
-            val profissional = profissionalRepository.buscarPorId(profissionalId)
-                ?: return call.respond(HttpStatusCode.NotFound, "Profissional não encontrado")
+        val profissional = profissionalRepository.buscarPorId(profissionalId)
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-            agendaService.definirDiaDeFolga(
-                profissional = profissional,
-                diaDeFolga = request.diaDeFolga,
-                usuarioLogado = usuarioLogado
-            )
+        agendaService.definirDiaDeFolga(profissional, request.diaDeFolga, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Dia de folga definido"))
+    }
 
-            call.respond(HttpStatusCode.OK, "Dia de folga definido")
+    suspend fun listarHorariosPorLocal(call: ApplicationCall) {
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val consultorioId = call.parameters["consultorioId"]
+            ?: throw InputInvalidoException("ID do Consultório não fornecido")
+        val duracaoMinutos = call.request.queryParameters["duracao"]?.toIntOrNull() ?: 60
 
-        } catch (e: SecurityException) {
-            call.respond(HttpStatusCode.Forbidden, mapOf("erro" to e.message))
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val profissional = profissionalRepository.buscarPorId(profissionalId)
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
+
+        val horarios = agendaService.listarHorariosDisponiveisPorLocal(
+            profissional = profissional,
+            consultorioId = consultorioId,
+            duracao = duracaoMinutos.minutes
+        )
+
+        val horariosString = horarios.map { it.toString() }
+        call.respond(HttpStatusCode.OK, HorariosDisponiveisResponse(horarios = horariosString))
     }
 
     suspend fun listarHorariosDisponiveis(call: ApplicationCall) {
-        try {
-            // Esta rota pode ser pública ou autenticada, dependendo da sua regra de segurança
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
-            val duracaoMinutos = call.request.queryParameters["duracao"]?.toIntOrNull() ?: 60
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val duracaoMinutos = call.request.queryParameters["duracao"]?.toIntOrNull() ?: 60
 
-            val profissional = profissionalRepository.buscarPorId(profissionalId)
-                ?: return call.respond(HttpStatusCode.NotFound, "Profissional não encontrado")
+        val profissional = profissionalRepository.buscarPorId(profissionalId)
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-            val horarios = agendaService.listarHorariosDisponiveis(
-                agenda = profissional.agenda,
-                duracao = duracaoMinutos.minutes
-            )
+        val horarios = agendaService.listarHorariosDisponiveis(profissional.agenda, duracaoMinutos.minutes)
 
-            // Converte LocalDateTime para String para serialização JSON
-            val horariosString = horarios.map { it.toString() }
-            call.respond(HttpStatusCode.OK, HorariosDisponiveisResponse(horarios = horariosString))
-
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        val horariosString = horarios.map { it.toString() }
+        call.respond(HttpStatusCode.OK, HorariosDisponiveisResponse(horarios = horariosString))
     }
 
     suspend fun obterStatusAgenda(call: ApplicationCall) {
-        try {
-            val usuarioLogado = call.principal<User>() ?: return call.respond(HttpStatusCode.Unauthorized)
-            val profissionalId = call.parameters["id"] ?: return call.respond(HttpStatusCode.BadRequest, "ID do Profissional não fornecido")
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
 
-            // Pega datas da query string, ex: /status?dataInicio=2025-10-27&dataFim=2025-11-02
-            val dataInicioStr = call.request.queryParameters["dataInicio"] ?: return call.respond(HttpStatusCode.BadRequest, "Parâmetro 'dataInicio' (YYYY-MM-DD) é obrigatório")
-            val dataFimStr = call.request.queryParameters["dataFim"] ?: return call.respond(HttpStatusCode.BadRequest, "Parâmetro 'dataFim' (YYYY-MM-DD) é obrigatório")
+        val dataInicioStr = call.request.queryParameters["dataInicio"]
+            ?: throw InputInvalidoException("Parâmetro 'dataInicio' (YYYY-MM-DD) é obrigatório")
+        val dataFimStr = call.request.queryParameters["dataFim"]
+            ?: throw InputInvalidoException("Parâmetro 'dataFim' (YYYY-MM-DD) é obrigatório")
 
-            val profissional = profissionalRepository.buscarPorId(profissionalId)
-                ?: return call.respond(HttpStatusCode.NotFound, "Profissional não encontrado")
+        val profissional = profissionalRepository.buscarPorId(profissionalId)
+            ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-            val statusMap = agendaService.obterStatusDaAgenda(
-                profissional = profissional,
-                dataInicio = LocalDate.parse(dataInicioStr),
-                dataFim = LocalDate.parse(dataFimStr)
-            )
+        val statusMap = agendaService.obterStatusDaAgenda(
+            profissional = profissional,
+            dataInicio = LocalDate.parse(dataInicioStr),
+            dataFim = LocalDate.parse(dataFimStr)
+        )
 
-            val statusMapString = statusMap.mapKeys { it.key.toString() }
-                .mapValues { it.value.name }
+        val statusMapString = statusMap.mapKeys { it.key.toString() }
+            .mapValues { it.value.name }
 
-            call.respond(HttpStatusCode.OK, StatusAgendaResponse(statusSlots = statusMapString))
-
-        } catch (e: IllegalArgumentException) {
-            call.respond(HttpStatusCode.BadRequest, "Formato de data inválido. Use YYYY-MM-DD.")
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro interno")))
-        }
+        call.respond(HttpStatusCode.OK, StatusAgendaResponse(statusSlots = statusMapString))
     }
 }

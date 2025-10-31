@@ -8,13 +8,25 @@ import org.koin.ktor.ext.inject
 
 fun Routing.usuarioRoutes() {
 
+    val usuarioController by inject<UsuarioController>()
+
     authenticate("auth-firebase-user") {
 
         get("/usuarios/me") {
 
+            usuarioController.buscarMeuPerfil(call)
         }
 
-        // TODO: Adicionar rotas que TODO usuário logado pode fazer
-        // Ex: GET /usuarios/meu-perfil
+        put {
+            usuarioController.atualizarMeuPerfil(call)
+        }
+
+        post("/seguranca") {
+            usuarioController.atualizarMinhaSenha(call)
+        }
+
+        delete {
+            usuarioController.deletarMinhaConta(call)
+        }
     }
 }

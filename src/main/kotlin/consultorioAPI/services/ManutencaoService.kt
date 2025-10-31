@@ -50,7 +50,7 @@ class ManutencaoService(private val pacienteRepository: PacienteRepository,
                 if (paciente.status == StatusUsuario.ATIVO) {
                     paciente.status = StatusUsuario.INATIVO
                     pacienteRepository.atualizar(paciente)
-                    TODO("Mensageria para enviar e-mail para o usuário falando que está com saudade")
+                    //TODO "Mensageria para enviar e-mail para o usuário falando que está com saudade"
                 }
             }
         }

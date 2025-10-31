@@ -1,6 +1,7 @@
 package com.consultorioAPI.services
 
 import com.consultorioAPI.config.fusoHorarioPadrao
+import com.consultorioAPI.exceptions.*
 import com.consultorioAPI.models.Consulta
 import com.consultorioAPI.models.Paciente
 import com.consultorioAPI.models.Profissional
@@ -33,7 +34,7 @@ class ConsultaService(
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = true)
 
         if (consulta.statusConsulta == StatusConsulta.REALIZADA || consulta.statusConsulta == StatusConsulta.CANCELADA) {
-            throw IllegalStateException("Não é possível reagendar uma consulta que já foi realizada ou cancelada.")
+            throw ConflitoDeEstadoException("Não é possível reagendar uma consulta que já foi realizada ou cancelada.")
         }
 
         val duracaoConsulta = consulta.duracaoEmMinutos.minutes
@@ -43,7 +44,7 @@ class ConsultaService(
         val isPacienteDisponivel = pacienteService.isPacienteDisponivel(paciente, novaData, duracaoConsulta)
 
         if (!isProfissionalDisponivel || !isPacienteDisponivel) {
-            throw IllegalStateException("Operação falhou. O horário solicitado não está disponível.")
+            throw ConflitoDeEstadoException("Operação falhou. O horário solicitado não está disponível.")
         }
 
         profissional.agenda.liberarHorario(consulta.dataHoraConsulta, duracaoConsulta)
@@ -64,7 +65,7 @@ class ConsultaService(
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = true)
 
         if (consulta.statusConsulta == StatusConsulta.REALIZADA || consulta.statusConsulta == StatusConsulta.CANCELADA) {
-            throw IllegalStateException("Não é possível cancelar uma consulta que já foi realizada ou cancelada.")
+            throw ConflitoDeEstadoException("Não é possível cancelar uma consulta que já foi realizada ou cancelada.")
         }
 
         val duracaoDaConsulta = consulta.duracaoEmMinutos.minutes
@@ -85,16 +86,16 @@ class ConsultaService(
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = false)
 
         if (novoStatus != StatusConsulta.REALIZADA && novoStatus != StatusConsulta.NAO_COMPARECEU) {
-            throw IllegalArgumentException("Este método só pode ser usado para marcar a consulta como REALIZADA ou NAO_COMPARECEU.")
+            throw InputInvalidoException("Este método só pode ser usado para marcar a consulta como REALIZADA ou NAO_COMPARECEU.")
         }
         if (consulta.statusConsulta != StatusConsulta.AGENDADA) {
-            throw IllegalStateException("Apenas consultas AGENDADAS podem ser finalizadas.")
+            throw ConflitoDeEstadoException("Apenas consultas AGENDADAS podem ser finalizadas.")
         }
 
         val agora = Clock.System.now()
         val horaConsultaInstant = consulta.dataHoraConsulta.toInstant(fusoHorarioPadrao)
         if (horaConsultaInstant > agora) {
-            throw IllegalStateException("Ainda não é hora de finalizar esta consulta.")
+            throw ConflitoDeEstadoException("Ainda não é hora de finalizar esta consulta.")
         }
 
         val consultaFinalizada = consulta.copy(statusConsulta = novoStatus)
@@ -103,9 +104,9 @@ class ConsultaService(
         if (novoStatus == StatusConsulta.REALIZADA) {
             val paciente = pacienteRepository.buscarPorId(
                 consulta.pacienteID
-                    ?: throw IllegalStateException("Consulta sem ID de paciente.")
+                    ?: throw ConflitoDeEstadoException("Consulta sem ID de paciente.")
             )
-                ?: throw IllegalStateException("Paciente não encontrado.")
+                ?: throw RecursoNaoEncontradoException("Paciente da consulta não encontrado.")
 
             if (paciente.status == StatusUsuario.INATIVO) {
                 paciente.status = StatusUsuario.ATIVO
@@ -116,21 +117,21 @@ class ConsultaService(
 
     suspend fun listarConsultasProfissional(profissionalIdAlvo: String, usuarioLogado: User): List<Consulta> {
 
-        // CHECAGEM DE PERMISSÃO
-        when (usuarioLogado.role) {
-            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {
-                // Permitido buscar qualquer profissional
-            }
-            Role.PROFISSIONAL -> {
-                val perfilProfissionalLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                    ?: throw SecurityException("Perfil profissional não encontrado para este usuário.")
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
+        } else {
+            when (usuarioLogado.role) {
+                Role.PROFISSIONAL -> {
+                    val perfilProfissionalLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                        ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado para este usuário.")
 
-                if (perfilProfissionalLogado.idProfissional != profissionalIdAlvo) {
-                    throw SecurityException("Profissionais só podem listar sua própria agenda.")
+                    if (perfilProfissionalLogado.idProfissional != profissionalIdAlvo) {
+                        throw NaoAutorizadoException("Profissionais só podem listar sua própria agenda.")
+                    }
                 }
-            }
-            Role.PACIENTE -> {
-                throw SecurityException("Pacientes não podem listar a agenda de profissionais.")
+                Role.PACIENTE -> {
+                    throw NaoAutorizadoException("Pacientes não podem listar a agenda de profissionais.")
+                }
+                else -> {}
             }
         }
         return consultaRepository.buscarPorProfissionalId(profissionalIdAlvo)
@@ -138,20 +139,21 @@ class ConsultaService(
 
     suspend fun listarConsultasPaciente(pacienteIdAlvo: String, usuarioLogado: User): List<Consulta> {
 
-        when (usuarioLogado.role) {
-            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
+        } else {
+            when (usuarioLogado.role) {
+                Role.PACIENTE -> {
+                    val perfilPacienteLogado = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                        ?: throw RecursoNaoEncontradoException("Perfil de paciente não encontrado para este usuário.")
 
-            }
-            Role.PACIENTE -> {
-                val perfilPacienteLogado = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                    ?: throw SecurityException("Perfil de paciente não encontrado para este usuário.")
-
-                if (perfilPacienteLogado.idPaciente != pacienteIdAlvo) {
-                    throw SecurityException("Pacientes só podem listar suas próprias consultas.")
+                    if (perfilPacienteLogado.idPaciente != pacienteIdAlvo) {
+                        throw NaoAutorizadoException("Pacientes só podem listar suas próprias consultas.")
+                    }
                 }
-            }
-            Role.PROFISSIONAL -> {
-                throw SecurityException("Profissionais não podem listar o histórico completo de pacientes por esta função.")
+                Role.PROFISSIONAL -> {
+                    throw NaoAutorizadoException("Profissionais não podem listar o histórico completo de pacientes por esta função.")
+                }
+                else -> {}
             }
         }
 
@@ -163,30 +165,33 @@ class ConsultaService(
         consulta: Consulta,
         permitePaciente: Boolean
     ) {
+
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) return
+
         when (usuarioLogado.role) {
-            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> return
 
             Role.PACIENTE -> {
-                if (!permitePaciente) throw SecurityException("Pacientes não podem executar esta ação.")
+                if (!permitePaciente) throw NaoAutorizadoException("Pacientes não podem executar esta ação.")
 
                 val perfilPacienteLogado = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                    ?: throw SecurityException("Perfil de paciente não encontrado.")
+                    ?: throw RecursoNaoEncontradoException("Perfil de paciente não encontrado.")
 
                 if (perfilPacienteLogado.idPaciente != consulta.pacienteID) {
-                    throw SecurityException("Pacientes só podem modificar suas próprias consultas.")
+                    throw NaoAutorizadoException("Pacientes só podem modificar suas próprias consultas.")
                 }
                 return
             }
 
             Role.PROFISSIONAL -> {
                 val perfilProfissionalLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                    ?: throw SecurityException("Perfil profissional não encontrado.")
+                    ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado.")
 
                 if (perfilProfissionalLogado.idProfissional != consulta.profissionalID) {
-                    throw SecurityException("Profissionais só podem modificar suas próprias consultas.")
+                    throw NaoAutorizadoException("Profissionais só podem modificar suas próprias consultas.")
                 }
                 return
             }
+            else -> {}
         }
     }
 

@@ -36,4 +36,12 @@ If the server starts successfully, you'll see the following output:
 2024-12-04 14:32:45.584 [main] INFO  Application - Application started in 0.303 seconds.
 2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
 ```
+### /admin/usuarios/linkar-perfil
 
+"Admin vira Profissional": O SuperAdmin quer ele mesmo atender. O que ele faz?
+
+1. O Admin digita o e-mail no formulário "Cadastrar Equipe".
+2. O frontend chama POST /admin/usuarios/equipe.
+3. A API retorna o 409 Conflict ("Este email já está em uso.").
+4. O frontend vê o 409 e mostra "Este e-mail já pertence a um usuário. Deseja linkar um perfil de Profissional a esta conta?"
+5. Se o Admin clicar "Sim", o frontend chama a outra rota: POST /admin/usuarios/linkar-perfil

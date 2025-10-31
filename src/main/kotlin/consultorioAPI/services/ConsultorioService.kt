@@ -1,8 +1,7 @@
 package com.consultorioAPI.services
 
 import com.consultorioAPI.config.fusoHorarioPadrao
-import com.consultorioAPI.exceptions.EmailBloqueadoException
-import com.consultorioAPI.exceptions.PacienteInativoException
+import com.consultorioAPI.exceptions.*
 import com.consultorioAPI.models.Consulta
 import com.consultorioAPI.models.Consultorio
 import com.consultorioAPI.models.Paciente
@@ -40,8 +39,8 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
     suspend fun cadastroConsultorio(nome: String, endereco: String, usuarioLogado: User): Consultorio {
 
-        if(usuarioLogado.role != Role.SUPER_ADMIN){
-            throw SecurityException("Apenas Super Admins podem cadastrar consultórios.")
+        if(!usuarioLogado.isSuperAdmin){
+            throw NaoAutorizadoException("Apenas Super Admins podem cadastrar consultórios.")
         }
 
         val novoConsultorio = Consultorio(nomeConsultorio = nome, endereco = endereco)
@@ -63,9 +62,9 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
         if (usuarioLogado.role == Role.PROFISSIONAL) {
             val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                ?: throw SecurityException("Perfil profissional não encontrado.")
+                ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado.")
             if (perfilLogado.idProfissional != profissional.idProfissional) {
-                throw SecurityException("Profissionais só podem agendar em suas próprias agendas.")
+                throw NaoAutorizadoException("Profissionais só podem agendar em suas próprias agendas.")
             }
         }
 
@@ -95,6 +94,54 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
     }
 
     @OptIn(ExperimentalTime::class)
+    suspend fun agendarConsultasEmPacote(
+        paciente: Paciente,
+        profissional: Profissional,
+        datas: List<LocalDateTime>,
+        usuarioLogado: User,
+        codigoPromocional: String? = null
+    ): List<Consulta> {
+
+        if (datas.isEmpty()) {
+            throw InputInvalidoException("A lista de datas do pacote não pode estar vazia.")
+        }
+
+        checarPermissaoAgendamento(usuarioLogado, paciente)
+
+        if (usuarioLogado.role == Role.PROFISSIONAL) {
+            val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado.")
+            if (perfilLogado.idProfissional != profissional.idProfissional) {
+                throw NaoAutorizadoException("Profissionais só podem agendar em suas próprias agendas.")
+            }
+        }
+
+        val consultasValidadas = datas.map { dataHora ->
+            criarEValidarConsulta(paciente, profissional, dataHora)
+        }
+
+        val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
+            paciente = paciente,
+            profissional = profissional,
+            dataConsultaProposta = datas.first().toInstant(fusoHorarioPadrao),
+            quantidadeConsultasSimultaneas = datas.size,
+            codigoPromocionalInput = codigoPromocional
+        )
+
+        val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
+        val idsPromocoesAplicadas = promocoesAplicadas.map { it.idPromocao }
+
+        val consultasSalvas = consultasValidadas.map { consulta ->
+            consulta.aplicarDesconto(descontoTotal)
+            consulta.promocoesAplicadasIds = idsPromocoesAplicadas
+            registrarConsulta(paciente, profissional, consulta)
+            consulta
+        }
+
+        return consultasSalvas
+    }
+
+    @OptIn(ExperimentalTime::class)
     suspend fun agendarConsultaPaciente(
         paciente: Paciente,
         profissional: Profissional,
@@ -108,48 +155,9 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
         if (usuarioLogado.role == Role.PROFISSIONAL) {
             val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                ?: throw SecurityException("Perfil profissional não encontrado.")
+                ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado.")
             if (perfilLogado.idProfissional != profissional.idProfissional) {
-                throw SecurityException("Profissionais só podem agendar em suas próprias agendas.")
-            }
-        }
-
-        val novaConsulta = criarEValidarConsulta(paciente, profissional, dataHora)
-
-        val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
-            paciente = paciente,
-            profissional = profissional,
-            dataConsultaProposta = novaConsulta.dataHoraConsulta.toInstant(fusoHorarioPadrao),
-            quantidadeConsultasSimultaneas = quantidade,
-            codigoPromocionalInput = codigoPromocional
-        )
-
-        val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
-        novaConsulta.aplicarDesconto(descontoTotal)
-        novaConsulta.promocoesAplicadasIds = promocoesAplicadas.map { it.idPromocao }
-
-        registrarConsulta(paciente, profissional, novaConsulta)
-        return novaConsulta
-    }
-
-    @OptIn(ExperimentalTime::class)
-    suspend fun agendarConsultaProfissional(
-        paciente: Paciente,
-        profissional: Profissional,
-        dataHora: LocalDateTime,
-        usuarioLogado: User,
-        codigoPromocional: String? = null,
-        quantidade: Int = 1): Consulta
-    {
-        verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = false)
-
-        checarPermissaoAgendamento(usuarioLogado, paciente)
-
-        if (usuarioLogado.role == Role.PROFISSIONAL) {
-            val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                ?: throw SecurityException("Perfil profissional não encontrado.")
-            if (perfilLogado.idProfissional != profissional.idProfissional) {
-                throw SecurityException("Profissionais só podem agendar em suas próprias agendas.")
+                throw NaoAutorizadoException("Profissionais só podem agendar em suas próprias agendas.")
             }
         }
 
@@ -204,10 +212,10 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         val duracaoDaConsulta = novaConsulta.duracaoEmMinutos.minutes
 
         if (!profissional.agenda.estaDisponivel(dataHora, duracaoDaConsulta)) {
-            throw IllegalArgumentException("Horário do profissional indisponível")
+            throw ConflitoDeEstadoException("Horário do profissional indisponível")
         }
         if (!pacienteService.isPacienteDisponivel(paciente, dataHora, duracaoDaConsulta)) {
-            throw IllegalArgumentException("Horário do paciente indisponível")
+            throw ConflitoDeEstadoException("Horário do paciente indisponível")
         }
 
         return novaConsulta
@@ -222,17 +230,20 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         usuarioLogado: User,
         pacienteDaConsulta: Paciente
     ) {
+
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) return
+
         when (usuarioLogado.role) {
-            Role.SUPER_ADMIN, Role.RECEPCIONISTA -> return
             Role.PACIENTE -> {
                 val perfilPacienteLogado = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                    ?: throw SecurityException("Perfil de paciente não encontrado para este usuário.")
+                    ?: throw RecursoNaoEncontradoException("Perfil de paciente não encontrado para este usuário.")
                 if (perfilPacienteLogado.idPaciente != pacienteDaConsulta.idPaciente) {
-                    throw SecurityException("Pacientes só podem agendar consultas para si mesmos.")
+                    throw NaoAutorizadoException("Pacientes só podem agendar consultas para si mesmos.")
                 }
                 return
             }
             Role.PROFISSIONAL -> return
+            else -> {}
         }
     }
 
@@ -242,21 +253,21 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         usuarioLogado: User
     ): Paciente {
         if (usuarioLogado.role == Role.PACIENTE) {
-            throw SecurityException("Pacientes não podem usar esta função de busca/cadastro.")
+            throw NaoAutorizadoException("Pacientes não podem usar esta função de busca/cadastro.")
         }
         if (emailBlocklistRepository.buscarPorEmail(email) != null) {
-            throw EmailBloqueadoException("Este email está bloqueado e não pode ser usado para agendamento ou cadastro.")
+            throw EmailBloqueadoException("Este email está bloqueado...")
         }
 
         val userExistente = userRepository.buscarPorEmail(email)
 
         if (userExistente != null) {
             if (userExistente.role != Role.PACIENTE) {
-                throw IllegalArgumentException("Este email pertence a um membro da equipe, não a um paciente.")
+                throw InputInvalidoException("Este email pertence a um membro da equipe, não a um paciente.")
             }
             // 5. Buscar o perfil Paciente associado
             val pacienteExistente = pacienteRepository.buscarPorUserId(userExistente.idUsuario)
-                ?: throw IllegalStateException("Usuário encontrado, mas perfil de paciente associado não existe.")
+                ?: throw RecursoNaoEncontradoException("Usuário encontrado, mas perfil de paciente associado não existe.")
 
             // 6. Verificar se o paciente existente está ATIVO
             if (pacienteExistente.status == StatusUsuario.INATIVO) {
@@ -265,15 +276,15 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                     "Este paciente existe mas está INATIVO. Reative-o para agendar.",
                     pacienteExistente.idPaciente
                 )
-                // O frontend pode capturar PacienteInativoException e mostrar o botão "Reativar?" (chamando atualizarStatusEquipe)
+                // O frontend pode capturar PacienteInativoException e mostrar o botão "Reativar?" (chamando desbloquearEmailPaciente)
             } else if (pacienteExistente.status != StatusUsuario.ATIVO) {
                 // Outros status não ativos (CONVIDADO, RECUSADO - não deveriam acontecer para Paciente, mas por segurança)
-                throw IllegalStateException("Este paciente existe mas não está ativo no sistema (${pacienteExistente.status}).")
+                throw ConflitoDeEstadoException("Este paciente existe mas não está ativo no sistema (${pacienteExistente.status}).")
             }
             return pacienteExistente
         } else {
             if (nome.isBlank()) {
-                throw IllegalArgumentException("Nome do paciente é obrigatório para pré-cadastro.")
+                throw InputInvalidoException("Nome do paciente é obrigatório para pré-cadastro.")
             }
             return usuarioService.preCadastrarPacientePeloStaff(nome, email, usuarioLogado)
         }
@@ -290,11 +301,11 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
         if (isAgendamentoDuplo) {
             if (consultasFuturasAgendadas.isNotEmpty()) {
-                throw IllegalStateException("Não é possível agendar consulta dupla inicial se já existem agendamentos futuros.")
+                throw ConflitoDeEstadoException("Não é possível agendar consulta dupla inicial se já existem agendamentos futuros.")
             }
         } else {
             if (consultasFuturasAgendadas.isNotEmpty()) {
-                throw IllegalStateException("Você já possui uma consulta futura agendada. Aguarde a realização ou cancele-a para agendar uma nova.")
+                throw ConflitoDeEstadoException("Você já possui uma consulta futura agendada. Aguarde a realização ou cancele-a para agendar uma nova.")
             }
         }
     }

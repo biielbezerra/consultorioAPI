@@ -14,8 +14,14 @@ fun Routing.profissionalRoutes() {
     authenticate("auth-firebase-user") {
         route("/profissionais/{id}") {
 
-            get("/{id}/horarios-disponiveis") {
+            //Horários gerais sem filtro
+            get("/horarios-disponiveis") {
                 profissionalController.listarHorariosDisponiveis(call)
+            }
+
+            //Horários por consultório
+            get("/consultorio/{consultorioId}/horarios-disponiveis") {
+                profissionalController.listarHorariosPorLocal(call)
             }
 
             // GET /profissionais/{id}/consultas

@@ -63,14 +63,6 @@ class SupabaseRecepcionistaRepository : RecepcionistaRepository {
         }.decodeList()
     }
 
-    override suspend fun buscarPorToken(token: String): Recepcionista? {
-        return table.select {
-            filter {
-                eq("conviteToken", token)
-            }
-        }.decodeAsOrNull<Recepcionista>()
-    }
-
     override suspend fun deletarPorId(id: String) {
         table.delete {
             filter {
