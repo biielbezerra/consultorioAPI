@@ -13,31 +13,31 @@ fun Routing.consultaRoutes() {
 
         route("/consultas") {
 
-            post {
+            post {//documentado
                 consultaController.agendarConsulta(call)
             }
 
             // POST /consultas/dupla
-            post("/dupla") {
+            post("/dupla") {//documentado
                 consultaController.agendarConsultaDupla(call)
             }
 
-            post("/pacote") {
+            post("/pacote") {//documentado
                 consultaController.agendarPacote(call)
             }
 
             // PUT /consultas/{id}/reagendar
-            put("/{id}/reagendar") {
+            put("/{id}/reagendar") {//documentado
                 consultaController.reagendarConsulta(call)
             }
 
             // POST /consultas/{id}/cancelar
-            post("/{id}/cancelar") {
+            post("/{id}/cancelar") {//documentado
                 consultaController.cancelarConsulta(call)
             }
 
             // POST /consultas/{id}/finalizar
-            post("/{id}/finalizar") {
+            post("/{id}/finalizar") {//documentado
                 consultaController.finalizarConsulta(call)
             }
         }

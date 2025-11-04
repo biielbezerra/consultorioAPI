@@ -16,7 +16,7 @@ fun Routing.publicCronRoutes() {
     route("/cron") {
         val cronSecret = System.getenv("CRON_SECRET_TOKEN") ?: "fallback-secret-para-teste"
 
-        post("/manutencao") {
+        post("/manutencao") {//documentado
             val secretHeader = call.request.header("X-Cron-Secret")
 
             if (secretHeader == cronSecret) {

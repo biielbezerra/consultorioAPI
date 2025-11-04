@@ -14,7 +14,7 @@ fun Routing.pacienteRoutes() {
         route("/pacientes/{id}") {
 
             // GET /pacientes/{id}/consultas
-            get("/consultas") {
+            get("/consultas") {//documentado
                 consultaController.listarConsultasPaciente(call)
             }
         }

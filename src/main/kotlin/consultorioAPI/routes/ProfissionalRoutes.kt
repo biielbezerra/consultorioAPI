@@ -15,60 +15,60 @@ fun Routing.profissionalRoutes() {
         route("/profissionais/{id}") {
 
             //Horários gerais sem filtro
-            get("/horarios-disponiveis") {
+            get("/horarios-disponiveis") {//documentado
                 profissionalController.listarHorariosDisponiveis(call)
             }
 
             //Horários por consultório
-            get("/consultorio/{consultorioId}/horarios-disponiveis") {
+            get("/consultorio/{consultorioId}/horarios-disponiveis") {//documentado
                 profissionalController.listarHorariosPorLocal(call)
             }
 
             // GET /profissionais/{id}/consultas
             // Lista as consultas do profissional (para ele mesmo ou staff)
-            get("/consultas") {
+            get("/consultas") {//documentado
                 consultaController.listarConsultasProfissional(call)
             }
 
             // GET /profissionais/{id}/agenda/status?dataInicio=...&dataFim=...
             // Visualiza a agenda (Ocupado, Disponível...)
-            get("/agenda/status") {
+            get("/agenda/status") {//documentado
                 profissionalController.obterStatusAgenda(call)
             }
 
             // PUT /profissionais/{id}/valor-consulta
             // Atualiza o valor base da consulta
-            put("/valor-consulta") {
+            put("/valor-consulta") {//documentado
                 profissionalController.atualizarValorConsulta(call)
             }
 
             // PUT /profissionais/{id}/agenda-config
             // Define os dias de trabalho (HorarioTrabalho)
-            put("/agenda-config") {
+            put("/agenda-config") {//documentado
                 profissionalController.configurarAgenda(call)
             }
 
             // POST /profissionais/{id}/agenda/folga
             // Define um dia de folga
-            post("/agenda/folga") {
+            post("/agenda/folga") {//documentado
                 profissionalController.definirFolga(call)
             }
 
             // GET /profissionais/{id}/promocoes-disponiveis
             // Lista promoções que ele pode ativar
-            get("/promocoes-disponiveis") {
+            get("/promocoes-disponiveis") {//documentado
                 profissionalController.listarPromocoesDisponiveis(call)
             }
 
             // POST /profissionais/{id}/promocoes/{promocaoId}/ativar
             // Ativa uma promoção
-            post("/promocoes/{promocaoId}/ativar") {
+            post("/promocoes/{promocaoId}/ativar") {//documentado
                 profissionalController.ativarPromocao(call)
             }
 
             // DELETE /profissionais/{id}/promocoes/{promocaoId}/desativar
             // Desativa uma promoção
-            delete("/promocoes/{promocaoId}/desativar") {
+            delete("/promocoes/{promocaoId}/desativar") {//documentado
                 profissionalController.desativarPromocao(call)
             }
         }
