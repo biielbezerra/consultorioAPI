@@ -12,21 +12,25 @@ fun Routing.usuarioRoutes() {
 
     authenticate("auth-firebase-user") {
 
-        get("/usuarios/me") {//documentado
 
-            usuarioController.buscarMeuPerfil(call)
-        }
+        route("/usuarios/me"){
 
-        put {//documentado
-            usuarioController.atualizarMeuPerfil(call)
-        }
+            get{//documentado
+                usuarioController.buscarMeuPerfil(call)
+            }
 
-        post("/seguranca") {//documentado
-            usuarioController.atualizarMinhaSenha(call)
-        }
+            put {//documentado
+                usuarioController.atualizarMeuPerfil(call)
+            }
 
-        delete {//documentado
-            usuarioController.deletarMinhaConta(call)
+            delete {//documentado
+                usuarioController.deletarMinhaConta(call)
+            }
+
+            post("/seguranca") {//documentado
+                usuarioController.atualizarMinhaSenha(call)
+            }
+
         }
     }
 }
