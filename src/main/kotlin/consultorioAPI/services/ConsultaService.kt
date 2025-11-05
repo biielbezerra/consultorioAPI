@@ -8,7 +8,9 @@ import com.consultorioAPI.models.Profissional
 import com.consultorioAPI.models.Role
 import com.consultorioAPI.models.StatusConsulta
 import com.consultorioAPI.models.StatusUsuario
+import com.consultorioAPI.models.TipoPromocao
 import com.consultorioAPI.models.User
+import com.consultorioAPI.services.*
 import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
@@ -21,9 +23,11 @@ class ConsultaService(
     private val pacienteService: PacienteService,
     private val consultaRepository: ConsultaRepository,
     private val pacienteRepository: PacienteRepository,
-    private val profissionalRepository: ProfissionalRepository
+    private val profissionalRepository: ProfissionalRepository,
+    private val promocaoService: PromocaoService
 ) {
 
+    @OptIn(ExperimentalTime::class)
     suspend fun reagendarConsulta(
         consulta: Consulta,
         profissional: Profissional,
@@ -33,26 +37,64 @@ class ConsultaService(
     ) {
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = true)
 
-        if (consulta.statusConsulta == StatusConsulta.REALIZADA || consulta.statusConsulta == StatusConsulta.CANCELADA) {
-            throw ConflitoDeEstadoException("Não é possível reagendar uma consulta que já foi realizada ou cancelada.")
+        if (consulta.statusConsulta != StatusConsulta.AGENDADA && consulta.statusConsulta != StatusConsulta.PENDENTE) {
+            throw ConflitoDeEstadoException("Não é possível agendar ou reagendar uma consulta que está ${consulta.statusConsulta}.")
         }
+
+        val isAgendamentoNovo = consulta.statusConsulta == StatusConsulta.PENDENTE
 
         val duracaoConsulta = consulta.duracaoEmMinutos.minutes
 
         val isProfissionalDisponivel = profissional.agenda.estaDisponivel(novaData, duracaoConsulta)
-
         val isPacienteDisponivel = pacienteService.isPacienteDisponivel(paciente, novaData, duracaoConsulta)
 
         if (!isProfissionalDisponivel || !isPacienteDisponivel) {
             throw ConflitoDeEstadoException("Operação falhou. O horário solicitado não está disponível.")
         }
 
-        profissional.agenda.liberarHorario(consulta.dataHoraConsulta, duracaoConsulta)
+        if (!isAgendamentoNovo) {
+            profissional.agenda.liberarHorario(consulta.dataHoraConsulta!!, duracaoConsulta)
+        }
 
-        val consultaReagendada = consulta.copy(dataHoraConsulta = novaData)
+        var promocoesFinais = consulta.promocoesAplicadasIds
+        var descontoFinal = consulta.descontoPercentual
+        var valorConsultaFinal = consulta.valorConsulta
 
-        profissional.agenda.bloquearHorario(consultaReagendada.dataHoraConsulta, consultaReagendada)
+        val promocoesOriginais = if (consulta.promocoesAplicadasIds?.isNotEmpty() == true) {
+            promocaoService.buscarPromocoesPorIds(consulta.promocoesAplicadasIds!!)
+        } else emptyList()
 
+        val isPromocaoTravada = promocoesOriginais.any {
+            it.tipoPromocao == TipoPromocao.PACOTE || it.tipoPromocao == TipoPromocao.PRIMEIRA_DUPLA
+        }
+
+        if (!isPromocaoTravada) {
+
+            val codigoOriginal = promocoesOriginais
+                .firstOrNull { it.tipoPromocao == TipoPromocao.CODIGO }?.codigoOpcional
+
+            val promocoesRecalculadas = promocaoService.buscarMelhorPromocaoAplicavel(
+                paciente = paciente,
+                profissional = profissional,
+                dataConsultaProposta = novaData.toInstant(fusoHorarioPadrao),
+                quantidadeConsultasSimultaneas = 1,
+                codigoPromocionalInput = codigoOriginal
+            )
+            descontoFinal = ConsultorioService.calcularDescontoTotal(promocoesRecalculadas)
+            valorConsultaFinal = consulta.valorBase * (1 - descontoFinal / 100)
+            promocoesFinais = promocoesRecalculadas.map { it.idPromocao }
+        }
+
+        val consultaReagendada = consulta.copy(
+            dataHoraConsulta = novaData,
+            statusConsulta = StatusConsulta.AGENDADA,
+            valorBase = consulta.valorBase,
+            valorConsulta = valorConsultaFinal,
+            descontoPercentual = descontoFinal,
+            promocoesAplicadasIds = promocoesFinais
+        )
+
+        profissional.agenda.bloquearHorario(consultaReagendada.dataHoraConsulta!!, consultaReagendada)
         consultaRepository.atualizar(consultaReagendada)
     }
 
@@ -68,9 +110,10 @@ class ConsultaService(
             throw ConflitoDeEstadoException("Não é possível cancelar uma consulta que já foi realizada ou cancelada.")
         }
 
-        val duracaoDaConsulta = consulta.duracaoEmMinutos.minutes
-
-        profissional.agenda.liberarHorario(consulta.dataHoraConsulta, duracaoDaConsulta)
+        if (consulta.statusConsulta == StatusConsulta.AGENDADA && consulta.dataHoraConsulta != null) {
+            val duracaoDaConsulta = consulta.duracaoEmMinutos.minutes
+            profissional.agenda.liberarHorario(consulta.dataHoraConsulta!!, duracaoDaConsulta)
+        }
 
         val consultaCancelada = consulta.copy(statusConsulta = StatusConsulta.CANCELADA)
 
@@ -93,7 +136,7 @@ class ConsultaService(
         }
 
         val agora = Clock.System.now()
-        val horaConsultaInstant = consulta.dataHoraConsulta.toInstant(fusoHorarioPadrao)
+        val horaConsultaInstant = consulta.dataHoraConsulta!!.toInstant(fusoHorarioPadrao)
         if (horaConsultaInstant > agora) {
             throw ConflitoDeEstadoException("Ainda não é hora de finalizar esta consulta.")
         }
@@ -101,13 +144,24 @@ class ConsultaService(
         val consultaFinalizada = consulta.copy(statusConsulta = novoStatus)
         consultaRepository.atualizar(consultaFinalizada)
 
-        if (novoStatus == StatusConsulta.REALIZADA) {
-            val paciente = pacienteRepository.buscarPorId(
-                consulta.pacienteID
-                    ?: throw ConflitoDeEstadoException("Consulta sem ID de paciente.")
-            )
-                ?: throw RecursoNaoEncontradoException("Paciente da consulta não encontrado.")
+        val paciente = pacienteRepository.buscarPorId(
+            consulta.pacienteID
+                ?: throw ConflitoDeEstadoException("Consulta sem ID de paciente.")
+        )
+            ?: throw RecursoNaoEncontradoException("Paciente da consulta não encontrado.")
 
+        if (novoStatus == StatusConsulta.REALIZADA) {
+            if (!consulta.promocoesAplicadasIds.isNullOrEmpty()) {
+                val codigosUsados = promocaoService.buscarPromocoesPorIds(consulta.promocoesAplicadasIds!!)
+                    .filter { it.tipoPromocao == TipoPromocao.CODIGO && !it.codigoOpcional.isNullOrBlank() }
+                    .map { it.codigoOpcional!!.trim().uppercase() }
+
+                if (codigosUsados.isNotEmpty()) {
+                    val codigosJaUsados = paciente.codigosPromocionaisUsados
+                    paciente.codigosPromocionaisUsados = (codigosJaUsados + codigosUsados).distinct()
+                    pacienteRepository.atualizar(paciente)
+                }
+            }
             if (paciente.status == StatusUsuario.INATIVO) {
                 paciente.status = StatusUsuario.ATIVO
                 pacienteRepository.atualizar(paciente)
@@ -128,9 +182,11 @@ class ConsultaService(
                         throw NaoAutorizadoException("Profissionais só podem listar sua própria agenda.")
                     }
                 }
+
                 Role.PACIENTE -> {
                     throw NaoAutorizadoException("Pacientes não podem listar a agenda de profissionais.")
                 }
+
                 else -> {}
             }
         }
@@ -150,9 +206,11 @@ class ConsultaService(
                         throw NaoAutorizadoException("Pacientes só podem listar suas próprias consultas.")
                     }
                 }
+
                 Role.PROFISSIONAL -> {
                     throw NaoAutorizadoException("Profissionais não podem listar o histórico completo de pacientes por esta função.")
                 }
+
                 else -> {}
             }
         }
@@ -191,6 +249,7 @@ class ConsultaService(
                 }
                 return
             }
+
             else -> {}
         }
     }

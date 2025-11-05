@@ -21,7 +21,7 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
 
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
         return consultas.any { consulta ->
-            val dataHoraConsultaInstant = consulta.dataHoraConsulta.toInstant(fusoHorarioPadrao)
+            val dataHoraConsultaInstant = consulta.dataHoraConsulta?.toInstant(fusoHorarioPadrao) ?: return@any false
 
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
                     dataHoraConsultaInstant > noventaDiasAtras
@@ -35,21 +35,24 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
 
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
         return consultas.none { consulta ->
-            val dataHoraConsultaInstant = consulta.dataHoraConsulta.toInstant(fusoHorarioPadrao)
+            val dataHoraConsultaInstant = consulta.dataHoraConsulta?.toInstant(fusoHorarioPadrao) ?: return@none false
+
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
                     dataHoraConsultaInstant > noventaDiasAtras
         }
     }
+
     @OptIn(ExperimentalTime::class)
     suspend fun isPacienteDisponivel(paciente: Paciente, novoHorario: LocalDateTime, duracao: Duration): Boolean {
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
         val novoHorarioFim = novoHorario.toInstant(fusoHorarioPadrao).plus(duracao).toLocalDateTime(fusoHorarioPadrao)
 
         return consultas.none { consulta ->
-            if(consulta.statusConsulta == StatusConsulta.CANCELADA) return@none false
-
-            val consultaExistenteInicio = consulta.dataHoraConsulta
-            val consultaExistenteFim = consulta.horarioFim()
+            if (consulta.statusConsulta == StatusConsulta.CANCELADA || consulta.dataHoraConsulta == null) {
+                return@none false
+            }
+            val consultaExistenteInicio = consulta.dataHoraConsulta!!
+            val consultaExistenteFim = consulta.horarioFim()!!
 
             novoHorario < consultaExistenteFim && novoHorarioFim > consultaExistenteInicio
         }

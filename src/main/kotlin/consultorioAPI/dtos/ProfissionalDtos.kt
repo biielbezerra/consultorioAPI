@@ -2,6 +2,7 @@ package consultorioAPI.dtos
 
 import com.consultorioAPI.models.HorarioTrabalho
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.Serializable
 import kotlin.time.Duration
 
@@ -28,4 +29,10 @@ data class HorariosDisponiveisResponse(
 @Serializable
 data class StatusAgendaResponse(
     val statusSlots: Map<String, String>
+)
+
+@Serializable
+data class IntervaloRequest(
+    val dataHoraInicio: LocalDateTime,
+    val dataHoraFim: LocalDateTime
 )

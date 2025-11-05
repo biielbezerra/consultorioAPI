@@ -5,9 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AreaAtuacao(
-    val idAreaArg: String? = null,
+    var idArea: String = "",
     val nome: String,
     val nomeRegistro: String? = null
-){
-    val idArea: String = idAreaArg ?: UUID.randomUUID().toString()
-}
+)

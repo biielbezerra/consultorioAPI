@@ -20,6 +20,7 @@ import kotlinx.datetime.toLocalDateTime
 import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Clock.*
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
 class UsuarioService(private val userRepository: UserRepository,
@@ -360,6 +361,7 @@ class UsuarioService(private val userRepository: UserRepository,
 
     }
 
+    @OptIn(ExperimentalTime::class)
     suspend fun deletarUsuario(
         userIdAlvo: String,
         usuarioLogado: User,
@@ -378,26 +380,67 @@ class UsuarioService(private val userRepository: UserRepository,
             throw InputInvalidoException("Super Admins não podem se auto-deletar por esta função.")
         }
 
+        val agora = Clock.System.now()
+
         when (userAlvo.role) {
             Role.PROFISSIONAL -> {
                 val perfil = profissionalRepository.buscarPorUserId(userAlvo.idUsuario)
-                if (perfil != null && !perfil.isDeletado) {
-                    perfil.isDeletado = true
-                    profissionalRepository.atualizar(perfil)
+                if (perfil != null) {
+
+                    val consultasFuturas = consultaRepository.buscarPorProfissionalId(perfil.idProfissional)
+                        .filter {
+                            it.statusConsulta == StatusConsulta.AGENDADA &&
+                                    it.dataHoraConsulta != null &&
+                                    it.dataHoraConsulta!!.toInstant(fusoHorarioPadrao) > agora
+                        }
+
+                    for (consulta in consultasFuturas) {
+                        consulta.statusConsulta = StatusConsulta.CANCELADA
+                        consultaRepository.atualizar(consulta)
+                        // TODO: Notificar PACIENTE (consulta.pacienteID) sobre o cancelamento
+                    }
+                    if (!perfil.isDeletado) {
+                        perfil.isDeletado = true
+                        perfil.status = StatusUsuario.INATIVO
+                        profissionalRepository.atualizar(perfil)
+                    }
                 }
             }
             Role.RECEPCIONISTA -> {
                 val perfil = recepcionistaRepository.buscarPorUserId(userAlvo.idUsuario)
                 if (perfil != null && !perfil.isDeletado) {
                     perfil.isDeletado = true
+                    perfil.status = StatusUsuario.INATIVO
                     recepcionistaRepository.atualizar(perfil)
                 }
             }
             Role.PACIENTE -> {
                 val perfil = pacienteRepository.buscarPorUserId(userAlvo.idUsuario)
-                if (perfil != null && !perfil.isDeletado) {
-                    perfil.isDeletado = true
-                    pacienteRepository.atualizar(perfil)
+                if (perfil != null) {
+                    val consultasFuturas = consultaRepository.buscarPorPacienteId(perfil.idPaciente)
+                        .filter {
+                            it.statusConsulta == StatusConsulta.AGENDADA || it.statusConsulta == StatusConsulta.PENDENTE
+                        }
+
+                    for (consulta in consultasFuturas) {
+                        consulta.statusConsulta = StatusConsulta.CANCELADA
+                        consultaRepository.atualizar(consulta)
+
+                        if (consulta.dataHoraConsulta != null && consulta.profissionalID != null) {
+                            val profissional = profissionalRepository.buscarPorId(consulta.profissionalID!!)
+                            if (profissional != null) {
+                                profissional.agenda.liberarHorario(consulta.dataHoraConsulta!!, consulta.duracaoEmMinutos.minutes)
+                                profissionalRepository.atualizar(profissional)
+                                // TODO: Notificar PROFISSIONAL sobre o cancelamento
+                            }
+                        }
+                    }
+
+                    if (!perfil.isDeletado) {
+                        perfil.isDeletado = true
+                        perfil.status = StatusUsuario.INATIVO
+                        pacienteRepository.atualizar(perfil)
+                    }
                 }
             }
             Role.SUPER_ADMIN -> {}
@@ -406,6 +449,7 @@ class UsuarioService(private val userRepository: UserRepository,
         if (!userAlvo.isDeletado) {
             userAlvo.email = "deleted_${userAlvo.idUsuario}@deleted.user"
             userAlvo.isDeletado = true
+            userAlvo.status = StatusUsuario.INATIVO
             userRepository.atualizar(userAlvo)
         }
 
@@ -420,9 +464,9 @@ class UsuarioService(private val userRepository: UserRepository,
         } catch (e: Exception) {
             println("AVISO: Falha ao deletar usuário $userIdAlvo do Firebase Auth: ${e.message}")
         }
-
     }
 
+    @OptIn(ExperimentalTime::class)
     suspend fun deletarMinhaConta(usuarioLogado: User) {
 
         when (usuarioLogado.role) {
@@ -439,10 +483,26 @@ class UsuarioService(private val userRepository: UserRepository,
         val userId = usuarioLogado.idUsuario
 
         val perfil = pacienteRepository.buscarPorUserId(userId)
-        if (perfil != null && !perfil.isDeletado) {
-            perfil.isDeletado = true
-            perfil.status = StatusUsuario.INATIVO
-            pacienteRepository.atualizar(perfil)
+            ?: throw RecursoNaoEncontradoException("Perfil de Paciente não encontrado para exclusão.")
+
+        val agora = Clock.System.now()
+        val consultasFuturas = consultaRepository.buscarPorPacienteId(perfil.idPaciente)
+            .filter {
+                it.statusConsulta == StatusConsulta.AGENDADA || it.statusConsulta == StatusConsulta.PENDENTE
+            }
+
+        for (consulta in consultasFuturas) {
+            consulta.statusConsulta = StatusConsulta.CANCELADA
+            consultaRepository.atualizar(consulta)
+
+            if (consulta.dataHoraConsulta != null && consulta.profissionalID != null) {
+                val profissional = profissionalRepository.buscarPorId(consulta.profissionalID!!)
+                if (profissional != null) {
+                    profissional.agenda.liberarHorario(consulta.dataHoraConsulta!!, consulta.duracaoEmMinutos.minutes)
+                    profissionalRepository.atualizar(profissional)
+                    // TODO: Notificar profissional sobre o cancelamento
+                }
+            }
         }
 
         if (!usuarioLogado.isDeletado) {
@@ -663,7 +723,8 @@ class UsuarioService(private val userRepository: UserRepository,
                     val consultasFuturas = consultaRepository.buscarPorProfissionalId(perfilProfissional.idProfissional)
                         .filter {
                             it.statusConsulta == StatusConsulta.AGENDADA &&
-                                    it.dataHoraConsulta.toInstant(fusoHorarioPadrao) > agora
+                                    it.dataHoraConsulta != null &&
+                                    it.dataHoraConsulta!!.toInstant(fusoHorarioPadrao) > agora
                         }
 
                     // Cancela consultas e avisa pacientes (aqui entra o EmailService)
@@ -701,6 +762,14 @@ class UsuarioService(private val userRepository: UserRepository,
         return emailBlocklistRepository.listarTodos()
     }
 
+    suspend fun listarPacientes(usuarioLogado: User): List<Paciente> {
+        if (!usuarioLogado.isSuperAdmin && usuarioLogado.role != Role.RECEPCIONISTA) {
+            throw NaoAutorizadoException("Apenas Admins ou Recepcionistas podem listar todos os pacientes.")
+        }
+        return pacienteRepository.listarTodos()
+    }
+
+    @OptIn(ExperimentalTime::class)
     suspend fun atualizarStatusEquipe(
         userIdAlvo: String,
         novoStatus: StatusUsuario,
@@ -720,10 +789,36 @@ class UsuarioService(private val userRepository: UserRepository,
             throw InputInvalidoException("Não é possível definir o status para CONVIDADO manualmente.")
         }
 
-        if (userAlvo.status != novoStatus) {
-            userAlvo.status = novoStatus
-            userRepository.atualizar(userAlvo)
+        if (userAlvo.status == novoStatus) {
+            return
         }
+
+        if (novoStatus == StatusUsuario.INATIVO && userAlvo.role == Role.PROFISSIONAL) {
+            val perfil = profissionalRepository.buscarPorUserId(userAlvo.idUsuario)
+                ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado para este usuário.")
+
+            val agora = Clock.System.now()
+            val consultasFuturas = consultaRepository.buscarPorProfissionalId(perfil.idProfissional)
+                .filter {
+                    it.statusConsulta == StatusConsulta.AGENDADA &&
+                            it.dataHoraConsulta != null &&
+                            it.dataHoraConsulta!!.toInstant(fusoHorarioPadrao) > agora
+                }
+
+            for (consulta in consultasFuturas) {
+                consulta.statusConsulta = StatusConsulta.CANCELADA
+                consultaRepository.atualizar(consulta)
+
+                perfil.agenda.liberarHorario(consulta.dataHoraConsulta!!, consulta.duracaoEmMinutos.minutes)
+
+                // TODO: Notificar PACIENTE (consulta.pacienteID) sobre o cancelamento
+                println("Consulta ${consulta.idConsulta} cancelada devido à inativação do profissional.")
+            }
+            profissionalRepository.atualizar(perfil)
+        }
+
+        userAlvo.status = novoStatus
+        userRepository.atualizar(userAlvo)
 
         when (userAlvo.role) {
             Role.PROFISSIONAL -> {
@@ -731,7 +826,9 @@ class UsuarioService(private val userRepository: UserRepository,
                     ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado para este usuário.")
                 if (perfil.status != novoStatus) {
                     perfil.status = novoStatus
-                    profissionalRepository.atualizar(perfil)
+                    if (novoStatus != StatusUsuario.INATIVO) {
+                        profissionalRepository.atualizar(perfil)
+                    }
                 }
             }
             Role.RECEPCIONISTA -> {

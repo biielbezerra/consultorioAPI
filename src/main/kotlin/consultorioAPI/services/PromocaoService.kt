@@ -25,6 +25,7 @@ class PromocaoService(
         profissionalIdAplicavel: String? = null,
         isCumulativa: Boolean = false,
         quantidadeMinima: Int? = null,
+        checarDataDaConsulta: Boolean = false,
         usuarioLogado: User
     ): Promocao {
 
@@ -84,10 +85,31 @@ class PromocaoService(
             criadoPorUserId = usuarioLogado.idUsuario,
             escopo = escopoPromocao,
             quantidadeMinimaConsultas = quantidadeMinima,
+            checarDataDaConsulta = checarDataDaConsulta,
             isCumulativa = isCumulativa
         )
 
         return promocaoRepository.salvar(novaPromocao)
+    }
+
+    suspend fun deletarPromocao(promocaoId: String, usuarioLogado: User) {
+        val promocao = promocaoRepository.buscarPorId(promocaoId)
+            ?: throw RecursoNaoEncontradoException("Promoção não encontrada.")
+
+        if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
+        } else if (usuarioLogado.role == Role.PROFISSIONAL) {
+            if (promocao.criadoPorUserId != usuarioLogado.idUsuario) {
+                throw NaoAutorizadoException("Profissionais só podem deletar promoções criadas por eles mesmos.")
+            }
+        } else {
+            throw NaoAutorizadoException("Usuário não autorizado a deletar promoções.")
+        }
+
+        // TODO: O que acontece com consultas futuras que tinham essa promoção?
+
+        promocao.isDeletado = true
+        promocao.isAtiva = false
+        promocaoRepository.atualizar(promocao)
     }
 
     @OptIn(ExperimentalTime::class)
@@ -102,7 +124,15 @@ class PromocaoService(
         val promocoesAplicaveis = mutableListOf<Promocao>()
 
         val candidatasRepo = promocaoRepository.listarTodas()
-            .filter { it.isAtiva && it.dataInicio <= agora && it.dataFim >= agora }
+            .filter { promo ->
+                if (promo.checarDataDaConsulta) {
+                    // Cenário "Black Friday": A *data da consulta* deve estar na janela
+                    promo.isAtiva && dataConsultaProposta >= promo.dataInicio && dataConsultaProposta <= promo.dataFim
+                } else {
+                    // Cenário "Compre Hoje": A *data de hoje* (compra) deve estar na janela
+                    promo.isAtiva && agora >= promo.dataInicio && agora <= promo.dataFim
+                }
+            }
 
         val candidatasFiltradas = candidatasRepo.filter { promo ->
             when (promo.escopo) {
@@ -128,7 +158,16 @@ class PromocaoService(
         }
 
         val promocaoPorCodigoEncontrada: Promocao? = if (!codigoPromocionalInput.isNullOrBlank()) {
-            promocoesValidadas.firstOrNull { it.tipoPromocao == TipoPromocao.CODIGO && it.codigoOpcional?.trim()?.uppercase() == codigoPromocionalInput.trim().uppercase() }
+            val codigoLimpo = codigoPromocionalInput.trim().uppercase()
+
+            if (paciente.codigosPromocionaisUsados.contains(codigoLimpo)) {
+                null
+            } else {
+                promocoesValidadas.firstOrNull {
+                    it.tipoPromocao == TipoPromocao.CODIGO &&
+                            it.codigoOpcional?.trim()?.uppercase() == codigoLimpo
+                }
+            }
         } else null
 
         val cumulativasNaoCodigo = promocoesValidadas.filter { it.isCumulativa && it.tipoPromocao != TipoPromocao.CODIGO }
@@ -143,8 +182,6 @@ class PromocaoService(
             if (!promocaoPorCodigoEncontrada.isCumulativa && melhorNaoCumulativaNaoCodigo != null) {
                 println("Aviso: Código ${promocaoPorCodigoEncontrada.codigoOpcional} não cumulativo sobrepôs outra promoção não cumulativa.")
             }
-
-
         } else {
             if (melhorNaoCumulativaNaoCodigo != null) {
                 promocoesAplicaveis.add(melhorNaoCumulativaNaoCodigo)
@@ -153,6 +190,23 @@ class PromocaoService(
         }
 
         return promocoesAplicaveis.distinctBy { it.idPromocao }
+    }
+
+    suspend fun buscarPromocoesPorIds(ids: List<String>): List<Promocao> {
+        return promocaoRepository.listarTodas(incluirDeletados = true)
+            .filter { ids.contains(it.idPromocao) }
+    }
+
+    suspend fun buscarCodigoOriginalPorIds(ids: List<String>): String? {
+        val promocoes = buscarPromocoesPorIds(ids)
+        return promocoes.firstOrNull { it.tipoPromocao == TipoPromocao.CODIGO }?.codigoOpcional
+    }
+
+    suspend fun listarTodasPromocoes(usuarioLogado: User): List<Promocao> {
+        if (!usuarioLogado.isSuperAdmin && usuarioLogado.role != Role.RECEPCIONISTA) {
+            throw NaoAutorizadoException("Apenas Admins ou Recepcionistas podem listar todas as promoções.")
+        }
+        return promocaoRepository.listarTodas(incluirDeletados = false)
     }
 
 }

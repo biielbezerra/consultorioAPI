@@ -1,5 +1,6 @@
 package com.consultorioAPI.models
 
+import com.consultorioAPI.config.fusoHorarioPadrao
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -11,14 +12,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Consulta(
-    val idConsultaArg: String? = null,
+    var idConsulta: String = "",
     val pacienteID: String?,
     val nomePaciente: String?,
     val profissionalID: String?,
     val nomeProfissional: String?,
     val area: String,
-    val dataHoraConsulta: LocalDateTime,
-    var statusConsulta: StatusConsulta,
+    var dataHoraConsulta: LocalDateTime? = null,
+    var statusConsulta: StatusConsulta = StatusConsulta.PENDENTE,
     var valorBase: Double,
     var valorConsulta: Double,
     var descontoPercentual: Double = 0.0,
@@ -26,7 +27,6 @@ data class Consulta(
     var duracaoEmMinutos: Int = 60,
     var promocoesAplicadasIds: List<String>? = null
 ) {
-    val idConsulta: String = idConsultaArg ?: UUID.randomUUID().toString()
 
     fun aplicarDesconto(desconto: Double) {
         this.descontoPercentual = desconto
@@ -34,14 +34,14 @@ data class Consulta(
     }
 
     @OptIn(ExperimentalTime::class)
-    fun horarioFim(): LocalDateTime {
-        val fusoHorario = TimeZone.currentSystemDefault() // Ou TimeZone.UTC
+    fun horarioFim(): LocalDateTime? {
+        val data = dataHoraConsulta ?: return null
         val duracao = this.duracaoEmMinutos.minutes
-        return dataHoraConsulta.toInstant(fusoHorario).plus(duracao).toLocalDateTime(fusoHorario)
+        return data.toInstant(fusoHorarioPadrao).plus(duracao).toLocalDateTime(fusoHorarioPadrao)
     }
 }
 
 @Serializable
 enum class StatusConsulta {
-    AGENDADA, CANCELADA, REALIZADA, NAO_COMPARECEU
+    AGENDADA, CANCELADA, REALIZADA, NAO_COMPARECEU, PENDENTE
 }

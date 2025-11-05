@@ -10,6 +10,7 @@ import com.consultorioAPI.models.Promocao
 import com.consultorioAPI.models.Role
 import com.consultorioAPI.models.StatusConsulta
 import com.consultorioAPI.models.StatusUsuario
+import com.consultorioAPI.models.TipoPromocao
 import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.ConsultorioRepository
@@ -74,7 +75,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
             profissional = profissional,
-            dataConsultaProposta = consulta1.dataHoraConsulta.toInstant(fusoHorarioPadrao),
+            dataConsultaProposta = consulta1.dataHoraConsulta!!.toInstant(fusoHorarioPadrao),
             quantidadeConsultasSimultaneas = quantidade,
             codigoPromocionalInput = codigoPromocional
         )
@@ -97,45 +98,67 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
     suspend fun agendarConsultasEmPacote(
         paciente: Paciente,
         profissional: Profissional,
-        datas: List<LocalDateTime>,
+        dataPrimeiraConsulta: LocalDateTime,
+        promocaoIdDoPacote: String,
         usuarioLogado: User,
         codigoPromocional: String? = null
     ): List<Consulta> {
 
-        if (datas.isEmpty()) {
-            throw InputInvalidoException("A lista de datas do pacote não pode estar vazia.")
+        val promocaoPacote = promocaoService.buscarPromocoesPorIds(listOf(promocaoIdDoPacote)).firstOrNull()
+            ?: throw RecursoNaoEncontradoException("Promoção (Pacote) não encontrada.")
+
+        if (promocaoPacote.tipoPromocao != TipoPromocao.PACOTE || promocaoPacote.quantidadeMinimaConsultas == null) {
+            throw InputInvalidoException("Esta promoção não é um pacote válido.")
         }
+
+        val quantidadeTotal = promocaoPacote.quantidadeMinimaConsultas!!
 
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
-        if (usuarioLogado.role == Role.PROFISSIONAL) {
-            val perfilLogado = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
-                ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado.")
-            if (perfilLogado.idProfissional != profissional.idProfissional) {
-                throw NaoAutorizadoException("Profissionais só podem agendar em suas próprias agendas.")
-            }
-        }
-
-        val consultasValidadas = datas.map { dataHora ->
-            criarEValidarConsulta(paciente, profissional, dataHora)
-        }
+        val primeiraConsulta = criarEValidarConsulta(paciente, profissional, dataPrimeiraConsulta)
+        primeiraConsulta.statusConsulta = StatusConsulta.AGENDADA
 
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
             profissional = profissional,
-            dataConsultaProposta = datas.first().toInstant(fusoHorarioPadrao),
-            quantidadeConsultasSimultaneas = datas.size,
+            dataConsultaProposta = dataPrimeiraConsulta.toInstant(fusoHorarioPadrao),
+            quantidadeConsultasSimultaneas = quantidadeTotal,
             codigoPromocionalInput = codigoPromocional
         )
+
+        if (!promocoesAplicadas.any { it.idPromocao == promocaoIdDoPacote }) {
+            throw ConflitoDeEstadoException("O pacote selecionado não é válido para este agendamento (ex: expirou, código incorreto, etc).")
+        }
 
         val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
         val idsPromocoesAplicadas = promocoesAplicadas.map { it.idPromocao }
 
-        val consultasSalvas = consultasValidadas.map { consulta ->
-            consulta.aplicarDesconto(descontoTotal)
-            consulta.promocoesAplicadasIds = idsPromocoesAplicadas
-            registrarConsulta(paciente, profissional, consulta)
-            consulta
+        primeiraConsulta.aplicarDesconto(descontoTotal)
+        primeiraConsulta.promocoesAplicadasIds = idsPromocoesAplicadas
+
+        val consultasCredito = List(quantidadeTotal - 1) {
+            Consulta(
+                pacienteID = paciente.idPaciente,
+                nomePaciente = paciente.nomePaciente,
+                profissionalID = profissional.idProfissional,
+                nomeProfissional = profissional.nomeProfissional,
+                area = profissional.areaAtuacaoId,
+                dataHoraConsulta = null,
+                statusConsulta = StatusConsulta.PENDENTE,
+                valorBase = profissional.valorBaseConsulta,
+                valorConsulta = profissional.valorBaseConsulta * (1 - descontoTotal / 100),
+                descontoPercentual = descontoTotal,
+                promocoesAplicadasIds = idsPromocoesAplicadas
+            )
+        }
+
+        val consultasSalvas = mutableListOf<Consulta>()
+
+        registrarConsulta(paciente, profissional, primeiraConsulta)
+        consultasSalvas.add(primeiraConsulta)
+
+        consultasCredito.forEach { credito ->
+            consultasSalvas.add(consultaRepository.salvar(credito))
         }
 
         return consultasSalvas
@@ -166,7 +189,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
             profissional = profissional,
-            dataConsultaProposta = novaConsulta.dataHoraConsulta.toInstant(fusoHorarioPadrao),
+            dataConsultaProposta = novaConsulta.dataHoraConsulta!!.toInstant(fusoHorarioPadrao),
             quantidadeConsultasSimultaneas = quantidade,
             codigoPromocionalInput = codigoPromocional
         )
@@ -179,18 +202,20 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         return novaConsulta
     }
 
-    private fun calcularDescontoTotal(promocoesAplicadas: List<Promocao>): Double {
-        val cumulativas = promocoesAplicadas.filter { it.isCumulativa }
-        val naoCumulativas = promocoesAplicadas.filterNot { it.isCumulativa }
+    companion object{
+        fun calcularDescontoTotal(promocoesAplicadas: List<Promocao>): Double {
+            val cumulativas = promocoesAplicadas.filter { it.isCumulativa }
+            val naoCumulativas = promocoesAplicadas.filterNot { it.isCumulativa }
 
-        val melhorNaoCumulativa = naoCumulativas.maxByOrNull { it.percentualDesconto }
+            val melhorNaoCumulativa = naoCumulativas.maxByOrNull { it.percentualDesconto }
 
-        var descontoTotal = cumulativas.sumOf { it.percentualDesconto }
-        if (melhorNaoCumulativa != null) {
-            descontoTotal += melhorNaoCumulativa.percentualDesconto
+            var descontoTotal = cumulativas.sumOf { it.percentualDesconto }
+            if (melhorNaoCumulativa != null) {
+                descontoTotal += melhorNaoCumulativa.percentualDesconto
+            }
+
+            return min(descontoTotal, 100.0)
         }
-
-        return min(descontoTotal, 100.0)
     }
 
     private suspend fun criarEValidarConsulta(
@@ -223,7 +248,9 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
     private suspend fun registrarConsulta(paciente: Paciente, profissional: Profissional, consulta: Consulta) {
         consultaRepository.salvar(consulta)
-        profissional.agenda.bloquearHorario(consulta.dataHoraConsulta,consulta)
+        if (consulta.dataHoraConsulta != null) {
+            profissional.agenda.bloquearHorario(consulta.dataHoraConsulta!!, consulta)
+        }
     }
 
     private suspend fun checarPermissaoAgendamento(
@@ -296,7 +323,8 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         val consultasFuturasAgendadas = consultaRepository.buscarPorPacienteId(pacienteId)
             .filter {
                 it.statusConsulta == StatusConsulta.AGENDADA &&
-                        it.dataHoraConsulta.toInstant(fusoHorarioPadrao) > agora
+                        it.dataHoraConsulta != null &&
+                        it.dataHoraConsulta!!.toInstant(fusoHorarioPadrao) > agora
             }
 
         if (isAgendamentoDuplo) {

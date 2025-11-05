@@ -80,10 +80,6 @@ class ConsultaController(
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
         val request = call.receive<AgendamentoPacoteRequest>()
 
-        if (request.datas.isEmpty()) {
-            throw InputInvalidoException("A lista de datas não pode ser vazia.")
-        }
-
         val profissional = profissionalRepository.buscarPorId(request.profissionalId)
             ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
@@ -96,7 +92,8 @@ class ConsultaController(
         val novasConsultas = consultorioService.agendarConsultasEmPacote(
             paciente = paciente,
             profissional = profissional,
-            datas = request.datas,
+            dataPrimeiraConsulta = request.dataPrimeiraConsulta,
+            promocaoIdDoPacote = request.promocaoIdDoPacote,
             usuarioLogado = usuarioLogado,
             codigoPromocional = request.codigoPromocional
         )

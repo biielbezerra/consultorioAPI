@@ -23,11 +23,11 @@ val repositoryModule = module {
 
 val serviceModule = module {
     single { PacienteService(get<ConsultaRepository>()) }
-    single { AgendaService(get<ProfissionalRepository>()) }
+    single { AgendaService(get<ProfissionalRepository>(), get<ConsultaRepository>()) }
 
     single { PromocaoService(get<PromocaoRepository>(), get<ConsultaRepository>(), get<PacienteService>(), get<ProfissionalRepository>()) }
     single { ProfissionalService(get<ProfissionalRepository>(), get<PromocaoRepository>(), get<AgendaService>()) }
-    single { ConsultaService(get<PacienteService>(), get<ConsultaRepository>(), get<PacienteRepository>(), get<ProfissionalRepository>()) }
+    single { ConsultaService(get<PacienteService>(), get<ConsultaRepository>(), get<PacienteRepository>(), get<ProfissionalRepository>(), get<PromocaoService>()) }
 
     single<UsuarioService> {
         UsuarioService(
@@ -78,7 +78,8 @@ val controllerModule = module {
         ProfissionalController(
             get<ProfissionalService>(),
             get<AgendaService>(),
-            get<ProfissionalRepository>()
+            get<ProfissionalRepository>(),
+            get<PromocaoService>()
         )
     }
 

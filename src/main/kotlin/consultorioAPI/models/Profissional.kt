@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Profissional(
-    val idProfissional: String = "",
+    var idProfissional: String = "",
     var nomeProfissional: String,
     var telefone: String? = null,
     val userId: String,

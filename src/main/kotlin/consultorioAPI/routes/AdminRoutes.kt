@@ -20,6 +20,9 @@ fun Routing.adminRoutes() {
             post("/promocoes") {//documentado
                 adminController.criarPromocao(call)
             }
+            delete("/promocoes/{id}") {
+                adminController.deletarPromocaoAdmin(call)
+            }
             post("/consultorios") {//documentado
                 adminController.criarConsultorio(call)
             }
@@ -54,6 +57,12 @@ fun Routing.adminRoutes() {
             }
             get("/profissionais") {//documentado
                 adminController.listarProfissionais(call)
+            }
+            get("/pacientes") {
+                adminController.listarPacientes(call)
+            }
+            get("/promocoes") {
+                adminController.listarTodasPromocoes(call)
             }
         }
     }

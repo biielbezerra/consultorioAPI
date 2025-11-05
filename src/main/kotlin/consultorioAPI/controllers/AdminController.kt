@@ -1,5 +1,6 @@
 package consultorioAPI.controllers
 
+import com.consultorioAPI.exceptions.InputInvalidoException
 import com.consultorioAPI.exceptions.NaoAutorizadoException
 import consultorioAPI.dtos.CriarConsultorioRequest
 import consultorioAPI.dtos.CriarPromocaoRequest
@@ -45,6 +46,17 @@ class AdminController(
             usuarioLogado = usuarioLogado
         )
         call.respond(HttpStatusCode.Created, novaPromocao)
+    }
+
+    suspend fun deletarPromocaoAdmin(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val promocaoId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID da Promoção não fornecido")
+
+        promocaoService.deletarPromocao(promocaoId, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Promoção deletada com sucesso."))
     }
 
     suspend fun criarConsultorio(call: ApplicationCall) {
@@ -94,6 +106,22 @@ class AdminController(
 
         val profissionais = profissionalService.listarProfissionaisAtivos(usuarioLogado)
         call.respond(HttpStatusCode.OK, profissionais)
+    }
+
+    suspend fun listarPacientes(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val pacientes = usuarioService.listarPacientes(usuarioLogado)
+        call.respond(HttpStatusCode.OK, pacientes)
+    }
+
+    suspend fun listarTodasPromocoes(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
+        val promocoes = promocaoService.listarTodasPromocoes(usuarioLogado)
+        call.respond(HttpStatusCode.OK, promocoes)
     }
 
 }

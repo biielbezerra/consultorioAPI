@@ -6,6 +6,7 @@ import com.consultorioAPI.models.Agenda
 import com.consultorioAPI.models.HorarioTrabalho
 import com.consultorioAPI.models.Profissional
 import com.consultorioAPI.models.Role
+import com.consultorioAPI.models.StatusConsulta
 import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
@@ -17,7 +18,8 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-class AgendaService(private val profissionalRepository: ProfissionalRepository){
+class AgendaService(private val profissionalRepository: ProfissionalRepository,
+                    private val consultaRepository: ConsultaRepository){
 
     suspend fun gerarDisponibilidadePadrao(
         agenda: Agenda,
@@ -59,12 +61,30 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository){
     }
 
     @OptIn(ExperimentalTime::class)
-    fun removerHorariosIntervalo(
+    suspend fun removerHorariosIntervalo(
+        profissionalId: String,
         agenda: Agenda,
         inicio: LocalDateTime,
         fim: LocalDateTime,
         tamanhoSlot: Duration = 30.minutes
     ) {
+
+        val consultasAgendadas = consultaRepository.buscarPorProfissionalId(profissionalId)
+            .filter {
+                it.statusConsulta == StatusConsulta.AGENDADA && it.dataHoraConsulta != null
+            }
+
+        val conflitos = consultasAgendadas.any { consulta ->
+            val consultaInicio = consulta.dataHoraConsulta!!
+            val consultaFim = consulta.horarioFim()!!
+            val haSobreposicao = inicio < consultaFim && fim > consultaInicio
+            haSobreposicao
+        }
+
+        if (conflitos) {
+            throw ConflitoDeEstadoException("Não é possível bloquear este intervalo, pois já existem consultas agendadas no período.")
+        }
+
         var horarioAtual = inicio
         while (horarioAtual < fim) {
             agenda.horariosDisponiveis.remove(horarioAtual)
@@ -97,8 +117,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository){
         blocosDeTrabalhoDoDia.forEach { bloco ->
             val inicioDoBloco: LocalDateTime = diaDeFolga.atTime(bloco.horarioInicio)
             val fimDoBloco: LocalDateTime = diaDeFolga.atTime(bloco.horarioFim)
-
-            removerHorariosIntervalo(profissional.agenda, inicioDoBloco, fimDoBloco)
+            removerHorariosIntervalo(profissional.idProfissional, profissional.agenda, inicioDoBloco, fimDoBloco)
         }
     }
 

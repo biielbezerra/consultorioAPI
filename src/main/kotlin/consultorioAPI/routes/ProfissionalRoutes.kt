@@ -54,6 +54,16 @@ fun Routing.profissionalRoutes() {
                 profissionalController.definirFolga(call)
             }
 
+            //Abre slot em horários que não estão definidos como horário de trabalho
+            post("/agenda/horario-extra") {
+                profissionalController.definirHorarioExtra(call)
+            }
+
+            // Rota para BLOQUEAR um horário
+            post("/agenda/bloquear-intervalo") {
+                profissionalController.bloquearIntervalo(call)
+            }
+
             // GET /profissionais/{id}/promocoes-disponiveis
             // Lista promoções que ele pode ativar
             get("/promocoes-disponiveis") {//documentado
@@ -70,6 +80,14 @@ fun Routing.profissionalRoutes() {
             // Desativa uma promoção
             delete("/promocoes/{promocaoId}/desativar") {//documentado
                 profissionalController.desativarPromocao(call)
+            }
+
+            post("/promocoes") {
+                profissionalController.criarPromocaoPropria(call)
+            }
+
+            delete("/promocoes/{promocaoId}") {
+                profissionalController.deletarPromocaoPropria(call)
             }
         }
     }

@@ -25,7 +25,7 @@ class ManutencaoService(private val pacienteRepository: PacienteRepository,
     private suspend fun atualizarAgendasFuturas() {
 
         val hoje: LocalDate = Clock.System.todayIn(fusoHorarioPadrao)
-        val novoDiaParaAdicionar: LocalDate = hoje.plus(4 * 7, DateTimeUnit.DAY)
+        val novoDiaParaAdicionar: LocalDate = hoje.plus(13 * 7, DateTimeUnit.DAY)
 
         val todosProfissionais = profissionalRepository.listarTodos()
 
