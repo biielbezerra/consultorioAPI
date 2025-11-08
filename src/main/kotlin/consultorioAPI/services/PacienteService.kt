@@ -21,7 +21,7 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
 
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
         return consultas.any { consulta ->
-            val dataHoraConsultaInstant = consulta.dataHoraConsulta?.toInstant(fusoHorarioPadrao) ?: return@any false
+            val dataHoraConsultaInstant = consulta.dataHoraConsulta ?: return@any false
 
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
                     dataHoraConsultaInstant > noventaDiasAtras
@@ -35,7 +35,7 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
 
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
         return consultas.none { consulta ->
-            val dataHoraConsultaInstant = consulta.dataHoraConsulta?.toInstant(fusoHorarioPadrao) ?: return@none false
+            val dataHoraConsultaInstant = consulta.dataHoraConsulta ?: return@none false
 
             consulta.statusConsulta == StatusConsulta.REALIZADA &&
                     dataHoraConsultaInstant > noventaDiasAtras
@@ -45,7 +45,7 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
     @OptIn(ExperimentalTime::class)
     suspend fun isPacienteDisponivel(paciente: Paciente, novoHorario: LocalDateTime, duracao: Duration): Boolean {
         val consultas = consultaRepository.buscarPorPacienteId(paciente.idPaciente)
-        val novoHorarioFim = novoHorario.toInstant(fusoHorarioPadrao).plus(duracao).toLocalDateTime(fusoHorarioPadrao)
+        val novoHorarioFim = novoHorario.toInstant(fusoHorarioPadrao).plus(duracao)
 
         return consultas.none { consulta ->
             if (consulta.statusConsulta == StatusConsulta.CANCELADA || consulta.dataHoraConsulta == null) {
@@ -54,7 +54,7 @@ class PacienteService(private val consultaRepository: ConsultaRepository) {
             val consultaExistenteInicio = consulta.dataHoraConsulta!!
             val consultaExistenteFim = consulta.horarioFim()!!
 
-            novoHorario < consultaExistenteFim && novoHorarioFim > consultaExistenteInicio
+            novoHorario.toInstant(fusoHorarioPadrao) < consultaExistenteFim && novoHorarioFim > consultaExistenteInicio
         }
     }
 

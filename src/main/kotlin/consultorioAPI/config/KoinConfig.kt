@@ -1,12 +1,13 @@
 package consultorioAPI.config
 
+import com.consultorioAPI.controllers.AreaAtuacaoController
 import com.consultorioAPI.repositories.*
 import com.consultorioAPI.repositories.impl.*
 import com.consultorioAPI.services.*
-import com.consultorioAPI.controllers.ConsultaController
-import consultorioAPI.controllers.AdminController
-import consultorioAPI.controllers.ProfissionalController
-import consultorioAPI.controllers.UsuarioController
+import consultorioAPI.controllers.*
+import consultorioAPI.services.ConsultorioService
+import consultorioAPI.services.PromocaoService
+import consultorioAPI.services.UsuarioService
 import org.koin.dsl.module
 
 val repositoryModule = module {
@@ -25,8 +26,15 @@ val serviceModule = module {
     single { PacienteService(get<ConsultaRepository>()) }
     single { AgendaService(get<ProfissionalRepository>(), get<ConsultaRepository>()) }
 
-    single { PromocaoService(get<PromocaoRepository>(), get<ConsultaRepository>(), get<PacienteService>(), get<ProfissionalRepository>()) }
-    single { ProfissionalService(get<ProfissionalRepository>(), get<PromocaoRepository>(), get<AgendaService>()) }
+    single {
+        PromocaoService(
+            get<PromocaoRepository>(),
+            get<ConsultaRepository>(),
+            get<PacienteService>(),
+            get<ProfissionalRepository>()
+        )
+    }
+    single { ProfissionalService(get<ProfissionalRepository>(), get<PromocaoRepository>(), get<AgendaService>(), get<ConsultorioRepository>(), get<UserRepository>(), get<AreaAtuacaoRepository>()) }
     single { ConsultaService(get<PacienteService>(), get<ConsultaRepository>(), get<PacienteRepository>(), get<ProfissionalRepository>(), get<PromocaoService>()) }
 
     single<UsuarioService> {
@@ -35,7 +43,6 @@ val serviceModule = module {
             get<PacienteRepository>(),
             get<ProfissionalRepository>(),
             get<RecepcionistaRepository>(),
-            get<AgendaService>(),
             get<AreaAtuacaoRepository>(),
             get<EmailBlocklistRepository>(),
             get<ConsultaRepository>()
@@ -55,7 +62,8 @@ val serviceModule = module {
             get<PromocaoService>(),
             get<EmailBlocklistRepository>(),
             get<UserRepository>(),
-            get<UsuarioService>()
+            get<UsuarioService>(),
+            get<AreaAtuacaoRepository>()
         )
     }
 }
@@ -70,7 +78,9 @@ val controllerModule = module {
             get<ConsultaService>(),
             get<ProfissionalRepository>(),
             get<ConsultaRepository>(),
-            get<PacienteRepository>()
+            get<PacienteRepository>(),
+            get<ConsultorioRepository>(),
+            get<AreaAtuacaoRepository>()
         )
     }
 
@@ -89,9 +99,13 @@ val controllerModule = module {
             get<ConsultorioService>(),
             get<ManutencaoService>(),
             get<UsuarioService>(),
-            get<ProfissionalService>()
+            get<ProfissionalService>(),
+            get<UserRepository>(),
+            get<AreaAtuacaoRepository>()
         )
     }
+
+    single { AreaAtuacaoController(get<AreaAtuacaoRepository>()) }
 }
 
 val appModule = module {

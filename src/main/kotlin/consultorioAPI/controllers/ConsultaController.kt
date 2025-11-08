@@ -1,22 +1,20 @@
-package com.consultorioAPI.controllers
+package consultorioAPI.controllers
 
 import consultorioAPI.dtos.*
-import com.consultorioAPI.exceptions.EmailBloqueadoException
-import com.consultorioAPI.exceptions.InputInvalidoException
-import com.consultorioAPI.exceptions.NaoAutorizadoException
-import com.consultorioAPI.exceptions.PacienteInativoException
-import com.consultorioAPI.exceptions.RecursoNaoEncontradoException
-import com.consultorioAPI.models.User
-import com.consultorioAPI.repositories.ConsultaRepository
-import com.consultorioAPI.repositories.PacienteRepository
-import com.consultorioAPI.repositories.ProfissionalRepository
-import com.consultorioAPI.services.ConsultaService
-import com.consultorioAPI.services.ConsultorioService
+import com.consultorioAPI.exceptions.*
+import com.consultorioAPI.models.*
+import com.consultorioAPI.repositories.*
+import com.consultorioAPI.services.*
+import consultorioAPI.mappers.*
+import consultorioAPI.services.ConsultorioService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 class ConsultaController(
     private val consultorioService: ConsultorioService,
@@ -24,6 +22,8 @@ class ConsultaController(
     private val profissionalRepository: ProfissionalRepository,
     private val consultaRepository: ConsultaRepository,
     private val pacienteRepository: PacienteRepository,
+    private val consultorioRepository: ConsultorioRepository,
+    private val areaAtuacaoRepository: AreaAtuacaoRepository
 ) {
 
     suspend fun agendarConsulta(call: ApplicationCall) {
@@ -34,45 +34,71 @@ class ConsultaController(
         val profissional = profissionalRepository.buscarPorId(request.profissionalId)
             ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-        val paciente = consultorioService.buscarOuPreCadastrarPaciente(
-            email = request.pacienteEmail,
-            nome = request.pacienteNome ?: "",
-            usuarioLogado = usuarioLogado
-        )
+        val paciente: Paciente
 
-        val novaConsulta = consultorioService.agendarConsultaPaciente(
+        if (usuarioLogado.role == Role.PACIENTE) {
+            if (!usuarioLogado.email.equals(request.pacienteEmail, ignoreCase = true)) {
+                throw NaoAutorizadoException("Pacientes só podem agendar consultas para o seu próprio e-mail.")
+            }
+            paciente = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                ?: throw RecursoNaoEncontradoException("Perfil de paciente não encontrado para o usuário logado.")
+
+        } else {
+            paciente = consultorioService.buscarOuPreCadastrarPaciente(
+                email = request.pacienteEmail,
+                nome = request.pacienteNome ?: "",
+                usuarioLogado = usuarioLogado
+            )
+        }
+
+        val novaConsultaResponse = consultorioService.agendarConsultaPaciente(
             paciente = paciente,
             profissional = profissional,
             dataHora = request.dataHora,
+            consultorioId = request.consultorioId,
             usuarioLogado = usuarioLogado,
             codigoPromocional = request.codigoPromocional
         )
-        call.respond(HttpStatusCode.Created, novaConsulta)
+
+        call.respond(HttpStatusCode.Created, novaConsultaResponse)
     }
 
     suspend fun agendarConsultaDupla(call: ApplicationCall) {
         val usuarioLogado = call.principal<User>()
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
+
         val request = call.receive<AgendamentoDuploRequest>()
 
         val profissional = profissionalRepository.buscarPorId(request.profissionalId)
             ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-        val paciente = consultorioService.buscarOuPreCadastrarPaciente(
-            email = request.pacienteEmail,
-            nome = request.pacienteNome ?: "",
-            usuarioLogado = usuarioLogado
-        )
+        val paciente: Paciente
 
-        val novasConsultas = consultorioService.agendarPrimeiraConsultaDupla(
+        if (usuarioLogado.role == Role.PACIENTE) {
+            if (!usuarioLogado.email.equals(request.pacienteEmail, ignoreCase = true)) {
+                throw NaoAutorizadoException("Pacientes só podem agendar consultas para o seu próprio e-mail.")
+            }
+            paciente = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                ?: throw RecursoNaoEncontradoException("Perfil de paciente não encontrado para o usuário logado.")
+
+        } else {
+            paciente = consultorioService.buscarOuPreCadastrarPaciente(
+                email = request.pacienteEmail,
+                nome = request.pacienteNome ?: "",
+                usuarioLogado = usuarioLogado
+            )
+        }
+
+        val novasConsultasResponse = consultorioService.agendarPrimeiraConsultaDupla(
             paciente = paciente,
             profissional = profissional,
-            dataHora1 = request.dataHora1,
-            dataHora2 = request.dataHora2,
+            consultorioId = request.consultorioId,
+            dataPrimeiraConsulta = request.dataPrimeiraConsulta,
             usuarioLogado = usuarioLogado,
             codigoPromocional = request.codigoPromocional
         )
-        call.respond(HttpStatusCode.Created, novasConsultas)
+
+        call.respond(HttpStatusCode.Created, novasConsultasResponse)
     }
 
     suspend fun agendarPacote(call: ApplicationCall) {
@@ -83,21 +109,32 @@ class ConsultaController(
         val profissional = profissionalRepository.buscarPorId(request.profissionalId)
             ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-        val paciente = consultorioService.buscarOuPreCadastrarPaciente(
-            email = request.pacienteEmail,
-            nome = request.pacienteNome ?: "",
-            usuarioLogado = usuarioLogado
-        )
+        val paciente: Paciente
+        if (usuarioLogado.role == Role.PACIENTE) {
+            if (!usuarioLogado.email.equals(request.pacienteEmail, ignoreCase = true)) {
+                throw NaoAutorizadoException("Pacientes só podem agendar pacotes para o seu próprio e-mail.")
+            }
+            paciente = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
+                ?: throw RecursoNaoEncontradoException("Perfil de paciente não encontrado para o usuário logado.")
+        } else {
+            paciente = consultorioService.buscarOuPreCadastrarPaciente(
+                email = request.pacienteEmail,
+                nome = request.pacienteNome ?: "",
+                usuarioLogado = usuarioLogado
+            )
+        }
 
-        val novasConsultas = consultorioService.agendarConsultasEmPacote(
+        val novasConsultasResponse = consultorioService.agendarConsultasEmPacote(
             paciente = paciente,
             profissional = profissional,
+            consultorioId = request.consultorioId,
             dataPrimeiraConsulta = request.dataPrimeiraConsulta,
             promocaoIdDoPacote = request.promocaoIdDoPacote,
             usuarioLogado = usuarioLogado,
             codigoPromocional = request.codigoPromocional
         )
-        call.respond(HttpStatusCode.Created, novasConsultas)
+
+        call.respond(HttpStatusCode.Created, novasConsultasResponse)
     }
 
     suspend fun reagendarConsulta(call: ApplicationCall) {
@@ -177,7 +214,12 @@ class ConsultaController(
             ?: throw InputInvalidoException("ID do Profissional não fornecido")
 
         val consultas = consultaService.listarConsultasProfissional(profissionalIdAlvo, usuarioLogado)
-        call.respond(HttpStatusCode.OK, consultas)
+        val response = coroutineScope {
+            consultas.map {
+                async { it.toResponse(consultorioRepository, areaAtuacaoRepository) }
+            }.awaitAll()
+        }
+        call.respond(HttpStatusCode.OK, response)
     }
 
     suspend fun listarConsultasPaciente(call: ApplicationCall) {
@@ -189,7 +231,12 @@ class ConsultaController(
             ?: throw InputInvalidoException("ID do Paciente não fornecido")
 
         val consultas = consultaService.listarConsultasPaciente(pacienteIdAlvo, usuarioLogado)
-        call.respond(HttpStatusCode.OK, consultas)
+        val response = coroutineScope {
+            consultas.map {
+                async { it.toResponse(consultorioRepository, areaAtuacaoRepository) }
+            }.awaitAll()
+        }
+        call.respond(HttpStatusCode.OK, response)
     }
 
 }

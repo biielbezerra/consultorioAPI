@@ -1,6 +1,6 @@
 package consultorioAPI.routes
 
-import com.consultorioAPI.controllers.ConsultaController
+import consultorioAPI.controllers.ConsultaController
 import consultorioAPI.controllers.ProfissionalController
 import io.ktor.server.routing.*
 import io.ktor.server.auth.*
@@ -40,6 +40,10 @@ fun Routing.profissionalRoutes() {
             // Atualiza o valor base da consulta
             put("/valor-consulta") {//documentado
                 profissionalController.atualizarValorConsulta(call)
+            }
+
+            put("/duracao-consulta") {
+                profissionalController.atualizarDuracaoConsulta(call)
             }
 
             // PUT /profissionais/{id}/agenda-config

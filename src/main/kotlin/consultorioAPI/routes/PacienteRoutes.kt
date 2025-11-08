@@ -1,6 +1,6 @@
 package com.consultorioAPI.routes
 
-import com.consultorioAPI.controllers.ConsultaController
+import consultorioAPI.controllers.ConsultaController
 import io.ktor.server.routing.*
 import io.ktor.server.auth.*
 import org.koin.ktor.ext.inject

@@ -18,11 +18,19 @@ class SupabaseEmailBlocklistRepository : EmailBlocklistRepository {
     }
 
     override suspend fun buscarPorEmail(email: String): String? {
-        val result = table.select {
-            filter {
-                eq("email", email)
+        val result = try {
+            val response = table.select {
+                filter {
+                    eq("email", email)
+                }
+                limit(1)
             }
-        }.decodeSingleOrNull<BlockedEmail>()
+            response.decodeList<BlockedEmail>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [EmailBlocklistRepo] - FALHA NA DECODIFICAÇÃO: ${e.message}")
+            e.printStackTrace()
+            null
+        }
         return result?.email
     }
 

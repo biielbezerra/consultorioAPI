@@ -1,20 +1,19 @@
 package consultorioAPI.controllers
 
-import com.consultorioAPI.exceptions.InputInvalidoException
-import com.consultorioAPI.exceptions.NaoAutorizadoException
-import consultorioAPI.dtos.CriarConsultorioRequest
-import consultorioAPI.dtos.CriarPromocaoRequest
+import com.consultorioAPI.exceptions.*
+import com.consultorioAPI.models.Profissional
+import com.consultorioAPI.models.Recepcionista
+import consultorioAPI.dtos.*
 import com.consultorioAPI.models.User
-import com.consultorioAPI.services.ConsultorioService
-import com.consultorioAPI.services.ManutencaoService
-import com.consultorioAPI.services.ProfissionalService
-import com.consultorioAPI.services.PromocaoService
-import com.consultorioAPI.services.UsuarioService
-import consultorioAPI.dtos.LinkarPerfilRequest
-import consultorioAPI.dtos.TransferirAdminRequest
+import com.consultorioAPI.repositories.*
+import com.consultorioAPI.services.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import consultorioAPI.mappers.*
+import consultorioAPI.services.ConsultorioService
+import consultorioAPI.services.PromocaoService
+import consultorioAPI.services.UsuarioService
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import kotlin.time.ExperimentalTime
@@ -25,7 +24,9 @@ class AdminController(
     private val consultorioService: ConsultorioService,
     private val manutencaoService: ManutencaoService,
     private val usuarioService: UsuarioService,
-    private val profissionalService: ProfissionalService
+    private val profissionalService: ProfissionalService,
+    private val userRepository: UserRepository,
+    private val areaAtuacaoRepository: AreaAtuacaoRepository
 ) {
 
     suspend fun criarPromocao(call: ApplicationCall) {
@@ -33,7 +34,7 @@ class AdminController(
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
         val request = call.receive<CriarPromocaoRequest>()
 
-        val novaPromocao = promocaoService.criarPromocao(
+        val novaPromocaoResponse = promocaoService.criarPromocao(
             descricao = request.descricao,
             percentualDesconto = request.percentualDesconto,
             dataInicio = request.dataInicio,
@@ -45,7 +46,7 @@ class AdminController(
             quantidadeMinima = request.quantidadeMinima,
             usuarioLogado = usuarioLogado
         )
-        call.respond(HttpStatusCode.Created, novaPromocao)
+        call.respond(HttpStatusCode.Created, novaPromocaoResponse)
     }
 
     suspend fun deletarPromocaoAdmin(call: ApplicationCall) {
@@ -69,6 +70,7 @@ class AdminController(
             endereco = request.endereco,
             usuarioLogado = usuarioLogado
         )
+
         call.respond(HttpStatusCode.Created, novoConsultorio)
     }
 
@@ -85,9 +87,24 @@ class AdminController(
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
         val dto = call.receive<LinkarPerfilRequest>()
-        val perfilCriado = usuarioService.linkarPerfilAUsuario(dto, usuarioLogado)
+        val perfilCriado = usuarioService.linkarPerfilAUsuario(
+            dto = dto,
+            usuarioLogado = usuarioLogado
+        )
 
-        call.respond(HttpStatusCode.Created, perfilCriado)
+        when (perfilCriado) {
+            is Profissional -> {
+                val response = perfilCriado.toResponse(userRepository, areaAtuacaoRepository)
+                call.respond(HttpStatusCode.Created, response)
+            }
+            is Recepcionista -> {
+                val response = perfilCriado.toResponse(userRepository)
+                call.respond(HttpStatusCode.Created, response)
+            }
+            else -> {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to "Falha ao mapear resposta do perfil linkado."))
+            }
+        }
     }
 
     suspend fun transferirSuperAdmin(call: ApplicationCall) {
@@ -104,24 +121,24 @@ class AdminController(
         val usuarioLogado = call.principal<User>()
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-        val profissionais = profissionalService.listarProfissionaisAtivos(usuarioLogado)
-        call.respond(HttpStatusCode.OK, profissionais)
+        val profissionaisResponse = profissionalService.listarProfissionaisAtivos(usuarioLogado)
+        call.respond(HttpStatusCode.OK, profissionaisResponse)
     }
 
     suspend fun listarPacientes(call: ApplicationCall) {
         val usuarioLogado = call.principal<User>()
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-        val pacientes = usuarioService.listarPacientes(usuarioLogado)
-        call.respond(HttpStatusCode.OK, pacientes)
+        val pacientesResponse = usuarioService.listarPacientes(usuarioLogado)
+        call.respond(HttpStatusCode.OK, pacientesResponse)
     }
 
     suspend fun listarTodasPromocoes(call: ApplicationCall) {
         val usuarioLogado = call.principal<User>()
             ?: throw NaoAutorizadoException("Usuário não autenticado.")
 
-        val promocoes = promocaoService.listarTodasPromocoes(usuarioLogado)
-        call.respond(HttpStatusCode.OK, promocoes)
+        val promocoesResponse = promocaoService.listarTodasPromocoes(usuarioLogado)
+        call.respond(HttpStatusCode.OK, promocoesResponse)
     }
 
 }

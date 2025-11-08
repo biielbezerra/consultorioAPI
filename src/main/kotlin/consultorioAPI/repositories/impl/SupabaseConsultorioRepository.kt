@@ -17,11 +17,19 @@ class SupabaseConsultorioRepository : ConsultorioRepository {
     }
 
     override suspend fun buscarPorId(id: String): Consultorio? {
-        return table.select {
-            filter {
-                eq("idConsultorio", id)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idConsultorio", id)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Consultorio>()
+            response.decodeList<Consultorio>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [ConsultorioRepo] - FALHA NA DECODIFICAÇÃO: ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorNome(nome: String): List<Consultorio> {

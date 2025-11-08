@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Recepcionista(
-    var idRecepcionista: String = "",
+    var idRecepcionista: String = UUID.randomUUID().toString(),
     var nomeRecepcionista: String,
     var telefone: String? = null,
     val userId: String,

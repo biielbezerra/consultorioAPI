@@ -27,4 +27,13 @@ fun Routing.authRoutes() {
         }
     }
 
+    authenticate("auth-firebase-token") {
+
+        route("/auth/social") {
+            post("/onboarding") {
+                usuarioController.obterOuCriarPerfilSocial(call)
+            }
+        }
+    }
+
 }

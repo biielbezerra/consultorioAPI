@@ -9,7 +9,7 @@ data class PreCadastroEquipeRequest(
     val email: String,
     val role: Role,
     val areaAtuacaoId: String,
-    val atributos: Map<String, String>? = null
+    val numeroRegistro: String? = null
 )
 
 @Serializable
@@ -52,6 +52,7 @@ data class RegistroPacienteRequest(
     val senha: String
 )
 
+@Serializable
 data class AtualizarMeuPerfilRequest(
     val nome: String? = null,
     val telefone: String? = null
@@ -66,8 +67,7 @@ data class AtualizarMinhaSenhaRequest(
 data class LinkarPerfilRequest(
     val userId: String,
     val role: Role,
-
     val nome: String,
     val areaAtuacaoId: String? = null,
-    val atributos: Map<String, String>? = null
+    val numeroRegistro: String? = null
 )

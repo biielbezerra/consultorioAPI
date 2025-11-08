@@ -30,12 +30,20 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
     }
 
     override suspend fun buscarPorId(id: String): Profissional? {
-        return table.select {
-            filter {
-                eq("idProfissional", id)
-                eq("isDeletado", false)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idProfissional", id)
+                    eq("isDeletado", false)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Profissional>()
+            response.decodeList<Profissional>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [ProfissionalRepo] - FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorNome(nome: String): List<Profissional> {
@@ -48,12 +56,20 @@ class SupabaseProfissionalRepository : ProfissionalRepository {
     }
 
     override suspend fun buscarPorUserId(userId: String): Profissional? {
-        return table.select {
-            filter {
-                eq("userId", userId)
-                eq("isDeletado", false)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("userId", userId)
+                    eq("isDeletado", false)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Profissional>()
+            response.decodeList<Profissional>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [ProfissionalRepo] - FALHA NA DECODIFICAÇÃO (buscarPorUserId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorArea(areaId: String): List<Profissional> {

@@ -17,4 +17,5 @@ interface ConsultaRepository {
 
     suspend fun atualizar(consulta: Consulta): Consulta
 
+    suspend fun deletarPorId(id: String)
 }

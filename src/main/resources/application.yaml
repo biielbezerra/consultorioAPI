@@ -5,4 +5,4 @@ ktor:
     deployment:
         port: 8080
     firebase:
-      projectId: "FIREBASE_PROJECT_ID"
+      projectId: ${FIREBASE_PROJECT_ID}

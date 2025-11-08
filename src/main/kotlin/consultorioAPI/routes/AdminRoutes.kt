@@ -1,5 +1,6 @@
 package consultorioAPI.routes
 
+import com.consultorioAPI.controllers.AreaAtuacaoController
 import consultorioAPI.controllers.AdminController
 import consultorioAPI.controllers.UsuarioController
 import io.ktor.server.application.*
@@ -11,6 +12,7 @@ fun Routing.adminRoutes() {
 
     val adminController by inject<AdminController>()
     val usuarioController by inject<UsuarioController>()
+    val areaAtuacaoController by inject<AreaAtuacaoController>()
 
     authenticate("auth-firebase-user") {
 
@@ -26,6 +28,14 @@ fun Routing.adminRoutes() {
             post("/consultorios") {//documentado
                 adminController.criarConsultorio(call)
             }
+
+            post("/areas-atuacao") {
+                areaAtuacaoController.criarAreaAtuacao(call)
+            }
+            get("/areas-atuacao") {
+                areaAtuacaoController.listarAreasAtuacao(call)
+            }
+
             post("/manutencao") {//documentado
                 adminController.executarManutencao(call)
             }

@@ -5,8 +5,10 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.serializer.KotlinXSerializer
 import io.ktor.client.engine.cio.CIO
 import kotlinx.datetime.TimeZone
+import kotlinx.serialization.json.Json
 
 val fusoHorarioPadrao = TimeZone.UTC
 
@@ -27,7 +29,12 @@ object SupabaseConfig {
         httpEngine = CIO.create()
 
         install(Postgrest) {
-
+            this@createSupabaseClient.defaultSerializer = KotlinXSerializer(
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
+            )
         }
 
         // install(Realtime) { ... }

@@ -1,0 +1,1152 @@
+# Este é o seu arquivo: src/main/resources/openapi/documentation.yaml
+
+openapi: 3.0.0
+info:
+  title: API Consultório
+  description: API para gerenciamento de consultório (Projeto de Estudo)
+  version: "1.0"
+servers:
+  - url: http://localhost:8080
+    description: Servidor de Desenvolvimento Local
+
+# -----------------------------------------------------------------
+# 1. DEFINIÇÃO DAS ROTAS (PATHS)
+# -----------------------------------------------------------------
+paths:
+  # Rotas de AuthRoutes.kt
+  /auth/register/paciente:
+    post:
+      summary: Registra um novo paciente (público)
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistroPacienteRequest'
+      responses:
+        '201':
+          description: Paciente criado com sucesso
+        '400':
+          description: Input inválido
+        '403':
+          description: Email bloqueado
+        '409':
+          description: Email já em uso
+
+  /auth/completar-cadastro:
+    post:
+      summary: Completa o cadastro de um membro da equipe (link do e-mail)
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompletarCadastroRequest'
+      responses:
+        '200':
+          description: Cadastro completo, usuário ativado
+        '404':
+          description: Token do convite não encontrado ou expirado
+        '409':
+          description: Convite não está mais pendente
+
+  /auth/recusar-convite:
+    post:
+      summary: Recusa um convite de equipe (link do e-mail)
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecusarConviteRequest'
+      responses:
+        '200':
+          description: Convite recusado com sucesso
+
+  /auth/social/onboarding:
+    post:
+      summary: (Login Social) Obtém ou cria um perfil de paciente
+      description: Rota para login social (Google, etc.). Usa o token do Firebase da autenticação 'auth-firebase-token'.
+      tags:
+        - Autenticação
+      security:
+        - bearerAuth: [ ] # <-- Indica que precisa de login
+      responses:
+        '200':
+          description: Perfil do paciente (existente ou recém-criado)
+        '401':
+          description: Token de autenticação social inválido
+
+  #
+  # Rotas de AdminRoutes.kt
+  #
+  /admin/promocoes:
+    post:
+      summary: (Admin) Cria uma promoção global ou específica
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CriarPromocaoRequest' }
+      responses:
+        '201': { description: Promoção criada }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado (Sem permissão de Admin) }
+    get:
+      summary: (Admin) Lista todas as promoções
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Lista de promoções }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/promocoes/{id}:
+    delete:
+      summary: (Admin) Deleta uma promoção
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Promoção deletada }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '404': { description: Promoção não encontrada }
+
+  /admin/consultorios:
+    post:
+      summary: (Admin) Cria um novo consultório
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CriarConsultorioRequest' }
+      responses:
+        '201': { description: Consultório criado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/areas-atuacao:
+    get:
+      summary: (Admin/Recep) Lista todas as Áreas de Atuação
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Lista de áreas }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+    post:
+      summary: (Admin/Recep) Cria uma nova Área de Atuação
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CriarAreaAtuacaoRequest' }
+      responses:
+        '201': { description: Área criada }
+        '400': { description: Nome inválido }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/manutencao:
+    post:
+      summary: (Admin) Executa a rotina de manutenção diária manualmente
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Manutenção executada }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/usuarios/equipe:
+    post:
+      summary: (Admin) Pré-cadastra um membro da equipe (Profissional/Recepcionista)
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreCadastroEquipeRequest' }
+      responses:
+        '201': { description: Usuário pré-cadastrado, convite pendente }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '409': { description: Email já em uso }
+
+  /admin/usuarios/{id}/status:
+    put:
+      summary: (Admin) Atualiza o status de um membro da equipe (ATIVO/INATIVO)
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do *Usuário* (não do perfil)" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtualizarStatusRequest' }
+      responses:
+        '200': { description: Status atualizado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '404': { description: Usuário não encontrado }
+
+  /admin/usuarios/{id}/reenviar-convite:
+    post:
+      summary: (Admin) Reenvia o convite para um membro da equipe
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do *Usuário* (não do perfil)" }
+      responses:
+        '200': { description: Convite reenviado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '404': { description: Usuário não encontrado }
+
+  /admin/usuarios/{id}:
+    delete:
+      summary: (Admin) Deleta um usuário (Paciente ou Equipe)
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do *Usuário* (não do perfil)" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeletarUsuarioRequest' }
+      responses:
+        '200': { description: Usuário deletado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '404': { description: Usuário não encontrado }
+
+  /admin/emails/desbloquear:
+    post:
+      summary: (Admin) Desbloqueia um email da blocklist
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailRequest' }
+      responses:
+        '200': { description: Email desbloqueado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/emails/bloqueados:
+    get:
+      summary: (Admin) Lista todos os emails bloqueados
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Lista de emails }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/usuarios/linkar-perfil:
+    post:
+      summary: (Admin) Linka um perfil (Prof/Recep) a um usuário SuperAdmin
+      tags: [ Admin - Usuários ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkarPerfilRequest' }
+      responses:
+        '201': { description: Perfil criado e linkado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '404': { description: Usuário ou Área de Atuação não encontrados }
+
+  /admin/transferir-propriedade:
+    post:
+      summary: (Admin) Transfere a propriedade de SuperAdmin para outro email
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferirAdminRequest' }
+      responses:
+        '200': { description: Propriedade transferida }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/profissionais:
+    get:
+      summary: (Admin) Lista todos os profissionais ativos
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Lista de profissionais }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /admin/pacientes:
+    get:
+      summary: (Admin) Lista todos os pacientes
+      tags: [ Admin ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Lista de pacientes }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  #
+  # Rotas de ConsultaRoutes.kt
+  #
+  /consultas:
+    post:
+      summary: Agenda uma nova consulta (avulsa)
+      tags: [ Consultas ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgendamentoRequest' }
+      responses:
+        '201': { description: Consulta agendada }
+        '401': { description: Não autenticado }
+        '403': { description: Email bloqueado ou Paciente não autorizado }
+        '409': { description: Conflito de horário ou Paciente Inativo }
+
+  /consultas/dupla:
+    post:
+      summary: Agenda uma consulta dupla (primeira vez)
+      tags: [ Consultas ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgendamentoDuploRequest' }
+      responses:
+        '201': { description: Consultas agendadas }
+        '401': { description: Não autenticado }
+        '409': { description: Conflito de horário ou Paciente já possui consultas }
+
+  /consultas/pacote:
+    post:
+      summary: Agenda um pacote de consultas (1 agendada + N créditos)
+      tags: [ Consultas ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgendamentoPacoteRequest' }
+      responses:
+        '201': { description: Pacote de consultas criado }
+        '401': { description: Não autenticado }
+        '404': { description: Promoção (Pacote) não encontrada }
+        '409': { description: Conflito de horário }
+
+  /consultas/{id}/reagendar:
+    put:
+      summary: Reagenda uma consulta existente
+      tags: [ Consultas ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID da Consulta" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReagendamentoRequest' }
+      responses:
+        '200': { description: Consulta reagendada }
+        '401': { description: Não autenticado }
+        '404': { description: Consulta, Paciente ou Profissional não encontrado }
+        '409': { description: Conflito de horário ou status de consulta inválido }
+
+  /consultas/{id}/cancelar:
+    post:
+      summary: Cancela uma consulta
+      tags: [ Consultas ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID da Consulta" }
+      responses:
+        '200': { description: Consulta cancelada }
+        '401': { description: Não autenticado }
+        '404': { description: Consulta não encontrada }
+        '409': { description: Consulta já realizada ou cancelada }
+
+  /consultas/{id}/finalizar:
+    post:
+      summary: Finaliza uma consulta (REALIZADA ou NAO_COMPARECEU)
+      tags: [ Consultas ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID da Consulta" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinalizarConsultaRequest' }
+      responses:
+        '200': { description: Consulta finalizada }
+        '400': { description: Status inválido (só REALIZADA ou NAO_COMPARECEU) }
+        '401': { description: Não autenticado }
+        '403': { description: Pacientes não podem finalizar consultas }
+        '409': { description: Consulta não está AGENDADA ou ainda não ocorreu }
+
+  #
+  # Rotas de ProfissionalRoutes.kt
+  #
+  /profissionais/{id}/horarios-disponiveis:
+    get:
+      summary: Lista todos os horários disponíveis (geral)
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      responses:
+        '200': { description: Lista de horários }
+        '401': { description: Não autenticado }
+        '404': { description: Profissional não encontrado }
+
+  /profissionais/{id}/consultorio/{consultorioId}/horarios-disponiveis:
+    get:
+      summary: Lista horários disponíveis filtrando por consultório
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+        - name: consultorioId
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Consultório" }
+      responses:
+        '200': { description: Lista de horários filtrada }
+        '401': { description: Não autenticado }
+        '404': { description: Profissional não encontrado }
+
+  /profissionais/{id}/consultas:
+    get:
+      summary: Lista todas as consultas de um profissional
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      responses:
+        '200': { description: Lista de consultas }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /profissionais/{id}/agenda/status:
+    get:
+      summary: Obtém o status da agenda (Ocupado, Disponível, etc)
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+        - name: dataInicio
+          in: query
+          required: true
+          schema: { type: string, format: date, description: "YYYY-MM-DD" }
+        - name: dataFim
+          in: query
+          required: true
+          schema: { type: string, format: date, description: "YYYY-MM-DD" }
+      responses:
+        '200':
+          description: Mapa de status da agenda
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusAgendaResponse' }
+        '400': { description: Datas não fornecidas }
+        '401': { description: Não autenticado }
+        '404': { description: Profissional não encontrado }
+
+  /profissionais/{id}/valor-consulta:
+    put:
+      summary: Atualiza o valor base da consulta do profissional
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtualizarValorRequest' }
+      responses:
+        '200': { description: Valor atualizado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /profissionais/{id}/duracao-consulta:
+    put:
+      summary: (Admin/Recep/Prof) Atualiza a duração padrão da consulta
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtualizarDuracaoRequest' }
+      responses:
+        '200': { description: Duração atualizada }
+        '400': { description: Duração inválida }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /profissionais/{id}/agenda-config:
+    put:
+      summary: Define a agenda de trabalho padrão (e gera horários futuros)
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfigurarAgendaRequest' }
+      responses:
+        '200': { description: Agenda configurada }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /profissionais/{id}/agenda/folga:
+    post:
+      summary: Define um dia de folga (remove horários de trabalho daquele dia)
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DefinirFolgaRequest' }
+      responses:
+        '200': { description: Folga definida }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '409': { description: Conflito (consultas agendadas nesse dia) }
+
+  /profissionais/{id}/agenda/horario-extra:
+    post:
+      summary: Adiciona um intervalo de disponibilidade (horário extra)
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntervaloRequest' }
+      responses:
+        '200': { description: Horário extra definido }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  /profissionais/{id}/agenda/bloquear-intervalo:
+    post:
+      summary: Bloqueia um intervalo de tempo (remove disponibilidade)
+      tags: [ Profissionais ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntervaloRequest' }
+      responses:
+        '200': { description: Intervalo bloqueado }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+        '409': { description: Conflito (consultas agendadas nesse intervalo) }
+
+  /profissionais/{id}/promocoes-disponiveis:
+    get:
+      summary: (Profissional) Lista promoções globais/próprias que ele pode ativar
+      tags: [ Profissionais - Promoções ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      responses:
+        '200': { description: Lista de promoções }
+        '401': { description: Não autenticado }
+
+  /profissionais/{id}/promocoes/{promocaoId}/ativar:
+    post:
+      summary: (Profissional) Ativa uma promoção para sua agenda
+      tags: [ Profissionais - Promoções ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+        - name: promocaoId
+          in: path
+          required: true
+          schema: { type: string, description: "ID da Promoção" }
+      responses:
+        '200': { description: Promoção ativada }
+        '401': { description: Não autenticado }
+        '403': { description: Promoção não aplicável a este profissional }
+        '409': { description: Promoção não está ativa }
+
+  /profissionais/{id}/promocoes/{promocaoId}/desativar:
+    delete:
+      summary: (Profissional) Desativa uma promoção de sua agenda
+      tags: [ Profissionais - Promoções ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+        - name: promocaoId
+          in: path
+          required: true
+          schema: { type: string, description: "ID da Promoção" }
+      responses:
+        '200': { description: Promoção desativada }
+        '401': { description: Não autenticado }
+
+  /profissionais/{id}/promocoes:
+    post:
+      summary: (Profissional) Cria uma promoção para si mesmo
+      tags: [ Profissionais - Promoções ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CriarPromocaoRequest' }
+      responses:
+        '201': { description: Promoção criada }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado (só pode criar para si mesmo) }
+
+  /profissionais/{id}/promocoes/{promocaoId}:
+    delete:
+      summary: (Profissional) Deleta uma promoção que ele mesmo criou
+      tags: [ Profissionais - Promoções ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Profissional" }
+        - name: promocaoId
+          in: path
+          required: true
+          schema: { type: string, description: "ID da Promoção" }
+      responses:
+        '200': { description: Promoção deletada }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado (só pode deletar as suas) }
+        '404': { description: Promoção não encontrada }
+
+  #
+  # Rotas de PacienteRoutes.kt
+  #
+  /pacientes/{id}/consultas:
+    get:
+      summary: Lista todas as consultas de um paciente
+      tags: [ Pacientes ]
+      security: [ { "bearerAuth": [ ] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: "ID do Paciente" }
+      responses:
+        '200': { description: Lista de consultas }
+        '401': { description: Não autenticado }
+        '403': { description: Não autorizado }
+
+  #
+  # Rotas de UsuarioRoutes.kt (Seu perfil)
+  #
+  /usuarios/me:
+    get:
+      summary: Busca o perfil do usuário logado (Paciente, Prof, etc)
+      tags: [ Usuário - Meu Perfil ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Perfil do usuário }
+        '401': { description: Não autenticado }
+        '404': { description: Perfil não encontrado (raro) }
+    put:
+      summary: Atualiza o perfil do usuário logado (nome, telefone)
+      tags: [ Usuário - Meu Perfil ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtualizarMeuPerfilRequest' }
+      responses:
+        '200': { description: Perfil atualizado }
+        '401': { description: Não autenticado }
+        '403': { description: Pacientes não podem alterar o nome por esta rota }
+    delete:
+      summary: (Paciente) Deleta a própria conta
+      tags: [ Usuário - Meu Perfil ]
+      security: [ { "bearerAuth": [ ] } ]
+      responses:
+        '200': { description: Conta deletada }
+        '401': { description: Não autenticado }
+        '403': { description: Equipe ou Admin não podem se deletar por esta rota }
+
+  /usuarios/me/seguranca:
+    post:
+      summary: Atualiza a senha do usuário logado
+      tags: [ Usuário - Meu Perfil ]
+      security: [ { "bearerAuth": [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtualizarMinhaSenhaRequest' }
+      responses:
+        '200': { description: Senha atualizada }
+        '400': { description: Senha não atende aos requisitos de força }
+        '401': { description: Não autenticado }
+
+  #
+  # Rotas de PublicCronRoutes.kt
+  #
+  /cron/manutencao:
+    post:
+      summary: (Cron Job) Rota pública para executar a manutenção diária
+      tags: [ Cron ]
+      parameters:
+        - name: X-Cron-Secret
+          in: header
+          required: true
+          schema: { type: string, description: "Token secreto para autorizar o Job" }
+      responses:
+        '200': { description: Manutenção executada }
+        '401': { description: Token secreto inválido }
+
+
+# -----------------------------------------------------------------
+# 2. DEFINIÇÃO DE SEGURANÇA (AUTENTICAÇÃO)
+# -----------------------------------------------------------------
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Insira o Token JWT do Firebase (para 'auth-firebase-user' ou 'auth-firebase-token')"
+
+  # -----------------------------------------------------------------
+  # 3. DEFINIÇÃO DOS SCHEMAS (NOSSOS DTOs)
+  # -----------------------------------------------------------------
+  schemas:
+    # --- AdminDtos.kt ---
+    CriarPromocaoRequest:
+      type: object
+      properties:
+        descricao:
+          type: string
+        percentualDesconto:
+          type: number
+          format: double
+        dataInicio:
+          type: string
+          format: date-time
+        dataFim:
+          type: string
+          format: date-time
+        tipoPromocao:
+          type: string
+          enum: [ PRIMEIRA_DUPLA, CLIENTE_FIEL, GERAL_PERIODO, CODIGO, PACOTE ]
+        codigoOpcional:
+          type: string
+        profissionalIdAplicavel:
+          type: string
+        isCumulativa:
+          type: boolean
+        quantidadeMinima:
+          type: integer
+
+    CriarAreaAtuacaoRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+        nomeRegistro:
+          type: string
+      required: [ nome ]
+
+    CriarConsultorioRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+        endereco:
+          type: string
+      required: [ nome, endereco ]
+
+    TransferirAdminRequest:
+      type: object
+      properties:
+        novoEmail:
+          type: string
+          format: email
+        excluirContaAntiga:
+          type: boolean
+      required: [ novoEmail, excluirContaAntiga ]
+
+    # --- ConsultaDtos.kt ---
+    AgendamentoRequest:
+      type: object
+      properties:
+        profissionalId:
+          type: string
+        dataHora:
+          type: string
+          format: date-time
+        pacienteEmail:
+          type: string
+          format: email
+        pacienteNome:
+          type: string
+        codigoPromocional:
+          type: string
+      required: [ profissionalId, dataHora, pacienteEmail ]
+
+    AgendamentoDuploRequest:
+      type: object
+      properties:
+        profissionalId:
+          type: string
+        dataHora1:
+          type: string
+          format: date-time
+        dataHora2:
+          type: string
+          format: date-time
+        pacienteEmail:
+          type: string
+          format: email
+        pacienteNome:
+          type: string
+        codigoPromocional:
+          type: string
+      required: [ profissionalId, dataHora1, dataHora2, pacienteEmail ]
+
+    AgendamentoPacoteRequest:
+      type: object
+      properties:
+        profissionalId:
+          type: string
+        promocaoIdDoPacote:
+          type: string
+        dataPrimeiraConsulta:
+          type: string
+          format: date-time
+        pacienteEmail:
+          type: string
+          format: email
+        pacienteNome:
+          type: string
+        codigoPromocional:
+          type: string
+      required: [ profissionalId, promocaoIdDoPacote, dataPrimeiraConsulta, pacienteEmail ]
+
+    ReagendamentoRequest:
+      type: object
+      properties:
+        novaData:
+          type: string
+          format: date-time
+      required: [ novaData ]
+
+    FinalizarConsultaRequest:
+      type: object
+      properties:
+        novoStatus:
+          type: string
+          enum: [ AGENDADA, CANCELADA, REALIZADA, NAO_COMPARECEU, PENDENTE ]
+      required: [ novoStatus ]
+
+    # --- ProfissionalDtos.kt ---
+    AtualizarValorRequest:
+      type: object
+      properties:
+        novoValor:
+          type: number
+          format: double
+      required: [ novoValor ]
+
+    AtualizarDuracaoRequest:
+      type: object
+      properties:
+        novaDuracaoMinutos:
+          type: integer
+          format: int32
+      required: [ novaDuracaoMinutos ]
+
+    ConfigurarAgendaRequest:
+      type: object
+      properties:
+        novasRegras:
+          type: array
+          items:
+            $ref: '#/components/schemas/HorarioTrabalho' # Reutilizando o Model
+      required: [ novasRegras ]
+
+    DefinirFolgaRequest:
+      type: object
+      properties:
+        diaDeFolga:
+          type: string
+          format: date
+      required: [ diaDeFolga ]
+
+    HorariosDisponiveisResponse:
+      type: object
+      properties:
+        horarios:
+          type: array
+          items:
+            type: string
+            format: date-time
+
+    StatusAgendaResponse:
+      type: object
+      properties:
+        statusSlots:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [ DISPONIVEL, OCUPADO, PASSADO, FORA_DO_HORARIO_DE_TRABALHO ]
+
+    IntervaloRequest:
+      type: object
+      properties:
+        dataHoraInicio:
+          type: string
+          format: date-time
+        dataHoraFim:
+          type: string
+          format: date-time
+      required: [ dataHoraInicio, dataHoraFim ]
+
+    # --- UsuarioDtos.kt ---
+    PreCadastroEquipeRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [ SUPER_ADMIN, RECEPCIONISTA, PROFISSIONAL, PACIENTE ]
+        areaAtuacaoId:
+          type: string
+        numeroRegistro:
+          type: string
+      required: [ nome, email, role, areaAtuacaoId ]
+
+    CompletarCadastroRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        senhaNova:
+          type: string
+          format: password
+      required: [ token, senhaNova ]
+
+    CriarPacienteRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+      required: [ userId, nome, email ]
+
+    AtualizarStatusRequest:
+      type: object
+      properties:
+        novoStatus:
+          type: string
+          enum: [ CONVIDADO, ATIVO, RECUSADO, INATIVO ]
+      required: [ novoStatus ]
+
+    RecusarConviteRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required: [ token ]
+
+    DeletarUsuarioRequest:
+      type: object
+      properties:
+        bloquearEmail:
+          type: boolean
+
+    EmailRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required: [ email ]
+
+    RegistroPacienteRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+        senha:
+          type: string
+          format: password
+      required: [ nome, email, senha ]
+
+    AtualizarMeuPerfilRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+        telefone:
+          type: string
+
+    AtualizarMinhaSenhaRequest:
+      type: object
+      properties:
+        novaSenha:
+          type: string
+          format: password
+      required: [ novaSenha ]
+
+    LinkarPerfilRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [ SUPER_ADMIN, RECEPCIONISTA, PROFISSIONAL, PACIENTE ]
+        nome:
+          type: string
+        areaAtuacaoId:
+          type: string
+        atributos:
+          type: object
+          additionalProperties:
+            type: string
+      required: [ userId, role, nome ]
+
+    # --- Models (reusados em DTOs) ---
+    # Model HorarioTrabalho (usado em ConfigurarAgendaRequest)
+    HorarioTrabalho:
+      type: object
+      properties:
+        diaDaSemana:
+          type: string
+          enum: [ MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY ]
+        horarioInicio:
+          type: string
+          example: "09:00:00" # Formato LocalTime
+        horarioFim:
+          type: string
+          example: "18:00:00" # Formato LocalTime
+        consultorioId:
+          type: string
+      required: [ diaDaSemana, horarioInicio, horarioFim, consultorioId ]

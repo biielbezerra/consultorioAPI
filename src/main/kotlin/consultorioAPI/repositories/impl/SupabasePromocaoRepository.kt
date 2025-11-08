@@ -27,12 +27,20 @@ class SupabasePromocaoRepository : PromocaoRepository {
     }
 
     override suspend fun buscarPorId(id: String, incluirDeletados: Boolean): Promocao? {
-        return table.select {
-            filter {
-                eq("idPromocao", id)
-                if (!incluirDeletados) { eq("isDeletado", false) }
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idPromocao", id)
+                    if (!incluirDeletados) { eq("isDeletado", false) }
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Promocao>()
+            response.decodeList<Promocao>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [PromocaoRepo] - FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun listarTodas(incluirDeletados: Boolean): List<Promocao> {
@@ -56,16 +64,24 @@ class SupabasePromocaoRepository : PromocaoRepository {
 
     @OptIn(ExperimentalTime::class)
     override suspend fun buscarAtivasPorCodigo(codigo: String, data: Instant): Promocao? {
-        return table.select {
-            filter {
-                eq("isAtiva", true)
-                eq("isDeletado", false)
-                lte("dataInicio", data.toString())
-                gte("dataFim", data.toString())
-                eq("tipoPromocao", TipoPromocao.CODIGO.name)
-                eq("codigoOpcional", codigo.trim().uppercase())
+        return try {
+            val response = table.select {
+                filter {
+                    eq("isAtiva", true)
+                    eq("isDeletado", false)
+                    lte("dataInicio", data.toString())
+                    gte("dataFim", data.toString())
+                    eq("tipoPromocao", TipoPromocao.CODIGO.name)
+                    eq("codigoOpcional", codigo.trim().uppercase())
+                }
+                limit(1)
             }
-        }.decodeSingleOrNull<Promocao>()
+            response.decodeList<Promocao>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [PromocaoRepo] - FALHA NA DECODIFICAÇÃO (buscarAtivasPorCodigo): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     @OptIn(ExperimentalTime::class)

@@ -69,6 +69,9 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         tamanhoSlot: Duration = 30.minutes
     ) {
 
+        val inicioInstant = inicio.toInstant(fusoHorarioPadrao)
+        val fimInstant = fim.toInstant(fusoHorarioPadrao)
+
         val consultasAgendadas = consultaRepository.buscarPorProfissionalId(profissionalId)
             .filter {
                 it.statusConsulta == StatusConsulta.AGENDADA && it.dataHoraConsulta != null
@@ -77,7 +80,8 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         val conflitos = consultasAgendadas.any { consulta ->
             val consultaInicio = consulta.dataHoraConsulta!!
             val consultaFim = consulta.horarioFim()!!
-            val haSobreposicao = inicio < consultaFim && fim > consultaInicio
+
+            val haSobreposicao = inicioInstant < consultaFim && fimInstant > consultaInicio
             haSobreposicao
         }
 
@@ -124,11 +128,12 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
     @OptIn(ExperimentalTime::class)
     fun listarHorariosDisponiveisPorLocal(
         profissional: Profissional,
-        consultorioId: String,
-        duracao: Duration = 60.minutes
+        consultorioId: String
     ): List<LocalDateTime> {
 
-        val todosHorariosPossiveis = listarHorariosDisponiveis(profissional.agenda, duracao)
+        val duracao = profissional.duracaoPadraoMinutos.minutes
+
+        val todosHorariosPossiveis = listarHorariosDisponiveis(profissional)
 
         return todosHorariosPossiveis.filter { horario ->
             profissional.diasDeTrabalho.any { regra ->
@@ -141,10 +146,10 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         }
     }
 
-    fun listarHorariosDisponiveis(
-        agenda: Agenda,
-        duracao: Duration = 60.minutes
-    ): List<LocalDateTime> {
+    fun listarHorariosDisponiveis(profissional: Profissional): List<LocalDateTime> {
+        val agenda = profissional.agenda
+        val duracao = profissional.duracaoPadraoMinutos.minutes
+
         val slotsPotenciais = agenda.horariosDisponiveis
             .filter { !agenda.horariosBloqueados.contains(it) }
 

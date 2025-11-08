@@ -29,21 +29,37 @@ class SupabaseRecepcionistaRepository : RecepcionistaRepository {
     }
 
     override suspend fun buscarPorId(id: String): Recepcionista? {
-        return table.select {
-            filter {
-                eq("idRecepcionista", id)
-                eq("isDeletado", false)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idRecepcionista", id)
+                    eq("isDeletado", false)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Recepcionista>()
+            response.decodeList<Recepcionista>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [RecepcionistaRepo] - FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorUserId(userId: String): Recepcionista? {
-        return table.select {
-            filter {
-                eq("userId", userId)
-                eq("isDeletado", false)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("userId", userId)
+                    eq("isDeletado", false)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Recepcionista>()
+            response.decodeList<Recepcionista>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [RecepcionistaRepo] - FALHA NA DECODIFICAÇÃO (buscarPorUserId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorNome(nome: String): List<Recepcionista> {

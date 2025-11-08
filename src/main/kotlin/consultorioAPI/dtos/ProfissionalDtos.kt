@@ -12,6 +12,11 @@ data class AtualizarValorRequest(
 )
 
 @Serializable
+data class AtualizarDuracaoRequest(
+    val novaDuracaoMinutos: Int
+)
+
+@Serializable
 data class ConfigurarAgendaRequest(
     val novasRegras: List<HorarioTrabalho>
 )

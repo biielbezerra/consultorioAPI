@@ -11,7 +11,7 @@ enum class PromocaoEscopo { GLOBAL, PROFISSIONAL }
 @OptIn(ExperimentalTime::class)
 @Serializable
 data class Promocao(
-    var idPromocao: String = "",
+    var idPromocao: String = UUID.randomUUID().toString(),
     val descricao: String,
     val percentualDesconto: Double,
     val dataInicio: Instant,

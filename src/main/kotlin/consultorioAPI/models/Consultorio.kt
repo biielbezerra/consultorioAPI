@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Consultorio(
-    var idConsultorio: String = "",
+    var idConsultorio: String = UUID.randomUUID().toString(),
     val nomeConsultorio: String,
     val endereco: String
 )

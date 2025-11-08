@@ -9,16 +9,19 @@ import kotlin.time.Duration.Companion.minutes
 import java.util.UUID
 import kotlin.time.ExperimentalTime
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
+@OptIn(ExperimentalTime::class)
 @Serializable
 data class Consulta(
-    var idConsulta: String = "",
+    var idConsulta: String = UUID.randomUUID().toString(),
     val pacienteID: String?,
     val nomePaciente: String?,
     val profissionalID: String?,
     val nomeProfissional: String?,
+    var consultorioId: String? = null,
     val area: String,
-    var dataHoraConsulta: LocalDateTime? = null,
+    var dataHoraConsulta: Instant? = null,
     var statusConsulta: StatusConsulta = StatusConsulta.PENDENTE,
     var valorBase: Double,
     var valorConsulta: Double,
@@ -34,10 +37,10 @@ data class Consulta(
     }
 
     @OptIn(ExperimentalTime::class)
-    fun horarioFim(): LocalDateTime? {
+    fun horarioFim(): Instant? {
         val data = dataHoraConsulta ?: return null
         val duracao = this.duracaoEmMinutos.minutes
-        return data.toInstant(fusoHorarioPadrao).plus(duracao).toLocalDateTime(fusoHorarioPadrao)
+        return data.plus(duracao)
     }
 }
 

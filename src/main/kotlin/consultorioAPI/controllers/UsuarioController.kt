@@ -1,22 +1,12 @@
 package consultorioAPI.controllers
 
 import com.consultorioAPI.config.FirebasePrincipal
-import com.consultorioAPI.exceptions.EmailBloqueadoException
-import com.consultorioAPI.exceptions.InputInvalidoException
-import com.consultorioAPI.exceptions.NaoAutorizadoException
-import consultorioAPI.dtos.AtualizarStatusRequest
-import consultorioAPI.dtos.CompletarCadastroRequest
-import consultorioAPI.dtos.CriarPacienteRequest
+import com.consultorioAPI.exceptions.*
+import consultorioAPI.dtos.*
 import consultorioAPI.dtos.PreCadastroEquipeRequest
 import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.models.User
-import com.consultorioAPI.services.UsuarioService
-import consultorioAPI.dtos.AtualizarMeuPerfilRequest
-import consultorioAPI.dtos.AtualizarMinhaSenhaRequest
-import consultorioAPI.dtos.DeletarUsuarioRequest
-import consultorioAPI.dtos.EmailRequest
-import consultorioAPI.dtos.RecusarConviteRequest
-import consultorioAPI.dtos.RegistroPacienteRequest
+import consultorioAPI.services.UsuarioService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -44,7 +34,7 @@ class UsuarioController(private val usuarioService: UsuarioService) {
             email = request.email,
             role = request.role,
             areaAtuacaoId = request.areaAtuacaoId,
-            atributos = request.atributos,
+            numeroRegistro = request.numeroRegistro,
             usuarioLogado = usuarioLogado
         )
         call.respond(HttpStatusCode.Created, usuarioCriado)
@@ -160,4 +150,14 @@ class UsuarioController(private val usuarioService: UsuarioService) {
         val emails = usuarioService.listarEmailsBloqueados(usuarioLogado)
         call.respond(HttpStatusCode.OK, emails)
     }
+
+    suspend fun obterOuCriarPerfilSocial(call: ApplicationCall) {
+        val principal = call.principal<FirebasePrincipal>()
+            ?: throw NaoAutorizadoException("Token de autenticação social inválido.")
+
+        val perfil = usuarioService.obterOuCriarPerfilSocial(principal)
+
+        call.respond(HttpStatusCode.OK, perfil)
+    }
+
 }

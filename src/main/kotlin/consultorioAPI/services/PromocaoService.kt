@@ -1,8 +1,11 @@
-package com.consultorioAPI.services
+package consultorioAPI.services
 
 import com.consultorioAPI.exceptions.*
 import com.consultorioAPI.models.*
 import com.consultorioAPI.repositories.*
+import com.consultorioAPI.services.PacienteService
+import consultorioAPI.mappers.*
+import consultorioAPI.dtos.*
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -27,7 +30,7 @@ class PromocaoService(
         quantidadeMinima: Int? = null,
         checarDataDaConsulta: Boolean = false,
         usuarioLogado: User
-    ): Promocao {
+    ): PromocaoResponse {
 
         if (tipoPromocao == TipoPromocao.PACOTE) {
             if (quantidadeMinima == null || quantidadeMinima <= 1) {
@@ -88,8 +91,9 @@ class PromocaoService(
             checarDataDaConsulta = checarDataDaConsulta,
             isCumulativa = isCumulativa
         )
+        val promocaoSalva = promocaoRepository.salvar(novaPromocao)
 
-        return promocaoRepository.salvar(novaPromocao)
+        return promocaoSalva.toResponse()
     }
 
     suspend fun deletarPromocao(promocaoId: String, usuarioLogado: User) {
@@ -202,11 +206,13 @@ class PromocaoService(
         return promocoes.firstOrNull { it.tipoPromocao == TipoPromocao.CODIGO }?.codigoOpcional
     }
 
-    suspend fun listarTodasPromocoes(usuarioLogado: User): List<Promocao> {
+    suspend fun listarTodasPromocoes(usuarioLogado: User): List<PromocaoResponse> {
         if (!usuarioLogado.isSuperAdmin && usuarioLogado.role != Role.RECEPCIONISTA) {
             throw NaoAutorizadoException("Apenas Admins ou Recepcionistas podem listar todas as promoções.")
         }
-        return promocaoRepository.listarTodas(incluirDeletados = false)
+        val promocoes = promocaoRepository.listarTodas(incluirDeletados = false)
+
+        return promocoes.map { it.toResponse() }
     }
 
 }

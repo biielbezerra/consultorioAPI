@@ -10,12 +10,14 @@ import com.consultorioAPI.models.StatusConsulta
 import com.consultorioAPI.models.StatusUsuario
 import com.consultorioAPI.models.TipoPromocao
 import com.consultorioAPI.models.User
-import com.consultorioAPI.services.*
 import com.consultorioAPI.repositories.ConsultaRepository
 import com.consultorioAPI.repositories.PacienteRepository
 import com.consultorioAPI.repositories.ProfissionalRepository
+import consultorioAPI.services.ConsultorioService
+import consultorioAPI.services.PromocaoService
 import kotlinx.datetime.*
 import kotlin.time.Clock
+import kotlinx.datetime.LocalDateTime
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
@@ -42,7 +44,6 @@ class ConsultaService(
         }
 
         val isAgendamentoNovo = consulta.statusConsulta == StatusConsulta.PENDENTE
-
         val duracaoConsulta = consulta.duracaoEmMinutos.minutes
 
         val isProfissionalDisponivel = profissional.agenda.estaDisponivel(novaData, duracaoConsulta)
@@ -52,8 +53,11 @@ class ConsultaService(
             throw ConflitoDeEstadoException("Operação falhou. O horário solicitado não está disponível.")
         }
 
-        if (!isAgendamentoNovo) {
-            profissional.agenda.liberarHorario(consulta.dataHoraConsulta!!, duracaoConsulta)
+        val consultaOriginal = consulta.copy()
+
+        if (!isAgendamentoNovo && consulta.dataHoraConsulta != null) {
+            val dataHoraLocalAntiga = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
+            profissional.agenda.liberarHorario(dataHoraLocalAntiga, duracaoConsulta)
         }
 
         var promocoesFinais = consulta.promocoesAplicadasIds
@@ -69,7 +73,6 @@ class ConsultaService(
         }
 
         if (!isPromocaoTravada) {
-
             val codigoOriginal = promocoesOriginais
                 .firstOrNull { it.tipoPromocao == TipoPromocao.CODIGO }?.codigoOpcional
 
@@ -86,7 +89,7 @@ class ConsultaService(
         }
 
         val consultaReagendada = consulta.copy(
-            dataHoraConsulta = novaData,
+            dataHoraConsulta = novaData.toInstant(fusoHorarioPadrao),
             statusConsulta = StatusConsulta.AGENDADA,
             valorBase = consulta.valorBase,
             valorConsulta = valorConsultaFinal,
@@ -94,10 +97,26 @@ class ConsultaService(
             promocoesAplicadasIds = promocoesFinais
         )
 
-        profissional.agenda.bloquearHorario(consultaReagendada.dataHoraConsulta!!, consultaReagendada)
-        consultaRepository.atualizar(consultaReagendada)
+        val dataHoraLocalNova = consultaReagendada.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
+        profissional.agenda.bloquearHorario(dataHoraLocalNova, consultaReagendada)
+
+        try {
+            consultaRepository.atualizar(consultaReagendada)
+
+            try {
+                profissionalRepository.atualizar(profissional)
+            } catch (eAgenda: Exception) {
+                println("ERRO ao salvar agenda, iniciando rollback da consulta: ${eAgenda.message}")
+                consultaRepository.atualizar(consultaOriginal)
+                throw ConflitoDeEstadoException("Falha ao atualizar a agenda do profissional. A consulta foi revertida ao estado original.")
+            }
+
+        } catch (eConsulta: Exception) {
+            throw ConflitoDeEstadoException("Falha ao salvar o reagendamento da consulta: ${eConsulta.message}")
+        }
     }
 
+    @OptIn(ExperimentalTime::class)
     suspend fun cancelarConsulta(
         consulta: Consulta,
         paciente: Paciente,
@@ -110,14 +129,24 @@ class ConsultaService(
             throw ConflitoDeEstadoException("Não é possível cancelar uma consulta que já foi realizada ou cancelada.")
         }
 
+        var agendaFoiModificada = false
         if (consulta.statusConsulta == StatusConsulta.AGENDADA && consulta.dataHoraConsulta != null) {
             val duracaoDaConsulta = consulta.duracaoEmMinutos.minutes
-            profissional.agenda.liberarHorario(consulta.dataHoraConsulta!!, duracaoDaConsulta)
+            val dataHoraLocal = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
+            profissional.agenda.liberarHorario(dataHoraLocal, duracaoDaConsulta)
+            agendaFoiModificada = true
         }
 
         val consultaCancelada = consulta.copy(statusConsulta = StatusConsulta.CANCELADA)
 
-        consultaRepository.atualizar(consultaCancelada)
+        try {
+            consultaRepository.atualizar(consultaCancelada)
+            if (agendaFoiModificada) {
+                profissionalRepository.atualizar(profissional)
+            }
+        } catch (e: Exception) {
+            throw ConflitoDeEstadoException("Falha ao salvar cancelamento: ${e.message}")
+        }
     }
 
     @OptIn(ExperimentalTime::class)
@@ -136,7 +165,7 @@ class ConsultaService(
         }
 
         val agora = Clock.System.now()
-        val horaConsultaInstant = consulta.dataHoraConsulta!!.toInstant(fusoHorarioPadrao)
+        val horaConsultaInstant = consulta.dataHoraConsulta!!
         if (horaConsultaInstant > agora) {
             throw ConflitoDeEstadoException("Ainda não é hora de finalizar esta consulta.")
         }

@@ -9,7 +9,7 @@ import com.consultorioAPI.models.User
 import com.consultorioAPI.repositories.ProfissionalRepository
 import com.consultorioAPI.services.AgendaService
 import com.consultorioAPI.services.ProfissionalService
-import com.consultorioAPI.services.PromocaoService
+import consultorioAPI.services.PromocaoService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -35,6 +35,17 @@ class ProfissionalController(
 
         profissionalService.atualizarValorConsulta(profissionalId, request.novoValor, usuarioLogado)
         call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Valor da consulta atualizado"))
+    }
+
+    suspend fun atualizarDuracaoConsulta(call: ApplicationCall) {
+        val usuarioLogado = call.principal<User>()
+            ?: throw NaoAutorizadoException("Usuário não autenticado.")
+        val profissionalId = call.parameters["id"]
+            ?: throw InputInvalidoException("ID do Profissional não fornecido")
+        val request = call.receive<AtualizarDuracaoRequest>()
+
+        profissionalService.atualizarDuracaoConsulta(profissionalId, request.novaDuracaoMinutos, usuarioLogado)
+        call.respond(HttpStatusCode.OK, mapOf("sucesso" to "Duração da consulta atualizada"))
     }
 
     suspend fun configurarAgenda(call: ApplicationCall) {
@@ -179,15 +190,13 @@ class ProfissionalController(
             ?: throw InputInvalidoException("ID do Profissional não fornecido")
         val consultorioId = call.parameters["consultorioId"]
             ?: throw InputInvalidoException("ID do Consultório não fornecido")
-        val duracaoMinutos = call.request.queryParameters["duracao"]?.toIntOrNull() ?: 60
 
         val profissional = profissionalRepository.buscarPorId(profissionalId)
             ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
         val horarios = agendaService.listarHorariosDisponiveisPorLocal(
             profissional = profissional,
-            consultorioId = consultorioId,
-            duracao = duracaoMinutos.minutes
+            consultorioId = consultorioId
         )
 
         val horariosString = horarios.map { it.toString() }
@@ -197,12 +206,11 @@ class ProfissionalController(
     suspend fun listarHorariosDisponiveis(call: ApplicationCall) {
         val profissionalId = call.parameters["id"]
             ?: throw InputInvalidoException("ID do Profissional não fornecido")
-        val duracaoMinutos = call.request.queryParameters["duracao"]?.toIntOrNull() ?: 60
 
         val profissional = profissionalRepository.buscarPorId(profissionalId)
             ?: throw RecursoNaoEncontradoException("Profissional não encontrado")
 
-        val horarios = agendaService.listarHorariosDisponiveis(profissional.agenda, duracaoMinutos.minutes)
+        val horarios = agendaService.listarHorariosDisponiveis(profissional)
 
         val horariosString = horarios.map { it.toString() }
         call.respond(HttpStatusCode.OK, HorariosDisponiveisResponse(horarios = horariosString))

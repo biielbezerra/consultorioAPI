@@ -1,27 +1,20 @@
-package com.consultorioAPI.services
+package consultorioAPI.services
 
 import com.consultorioAPI.config.fusoHorarioPadrao
 import com.consultorioAPI.exceptions.*
-import com.consultorioAPI.models.Consulta
-import com.consultorioAPI.models.Consultorio
-import com.consultorioAPI.models.Paciente
-import com.consultorioAPI.models.Profissional
-import com.consultorioAPI.models.Promocao
-import com.consultorioAPI.models.Role
-import com.consultorioAPI.models.StatusConsulta
-import com.consultorioAPI.models.StatusUsuario
-import com.consultorioAPI.models.TipoPromocao
-import com.consultorioAPI.models.User
-import com.consultorioAPI.repositories.ConsultaRepository
-import com.consultorioAPI.repositories.ConsultorioRepository
-import com.consultorioAPI.repositories.EmailBlocklistRepository
-import com.consultorioAPI.repositories.PacienteRepository
-import com.consultorioAPI.repositories.ProfissionalRepository
-import com.consultorioAPI.repositories.UserRepository
-import com.consultorioAPI.services.UsuarioService
+import com.consultorioAPI.models.*
+import com.consultorioAPI.repositories.*
+import com.consultorioAPI.services.AgendaService
+import com.consultorioAPI.services.PacienteService
+import consultorioAPI.dtos.*
+import consultorioAPI.mappers.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.*
 import kotlin.time.Clock
-import kotlin.time.Duration
+import kotlinx.datetime.LocalDateTime
+import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.math.min
 import kotlin.time.ExperimentalTime
@@ -36,28 +29,31 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                           private val emailBlocklistRepository: EmailBlocklistRepository,
                           private val userRepository: UserRepository,
                           private val usuarioService: UsuarioService,
+                          private val areaAtuacaoRepository: AreaAtuacaoRepository
 ) {
 
-    suspend fun cadastroConsultorio(nome: String, endereco: String, usuarioLogado: User): Consultorio {
+    suspend fun cadastroConsultorio(nome: String, endereco: String, usuarioLogado: User): ConsultorioResponse {
 
         if(!usuarioLogado.isSuperAdmin){
             throw NaoAutorizadoException("Apenas Super Admins podem cadastrar consultórios.")
         }
 
         val novoConsultorio = Consultorio(nomeConsultorio = nome, endereco = endereco)
-        return consultorioRepository.salvar(novoConsultorio)
+        val consultorioSalvo = consultorioRepository.salvar(novoConsultorio)
+
+        return consultorioSalvo.toResponse()
     }
 
     @OptIn(ExperimentalTime::class)
     suspend fun agendarPrimeiraConsultaDupla(
         paciente: Paciente,
         profissional: Profissional,
-        dataHora1: LocalDateTime,
-        dataHora2: LocalDateTime,
+        consultorioId: String,
+        dataPrimeiraConsulta: LocalDateTime,
         usuarioLogado: User,
         codigoPromocional: String? = null,
         quantidade: Int = 2
-    ): List<Consulta> {
+    ): List<ConsultaResponse> {
         verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = true)
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
@@ -69,13 +65,13 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
         }
 
-        val consulta1 = criarEValidarConsulta(paciente, profissional, dataHora1)
-        val consulta2 = criarEValidarConsulta(paciente, profissional, dataHora2)
+        val consulta1 = criarEValidarConsulta(paciente, profissional, dataPrimeiraConsulta, consultorioId)
+        consulta1.statusConsulta = StatusConsulta.AGENDADA
 
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
             profissional = profissional,
-            dataConsultaProposta = consulta1.dataHoraConsulta!!.toInstant(fusoHorarioPadrao),
+            dataConsultaProposta = consulta1.dataHoraConsulta!!,
             quantidadeConsultasSimultaneas = quantidade,
             codigoPromocionalInput = codigoPromocional
         )
@@ -85,24 +81,73 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
         consulta1.aplicarDesconto(descontoTotal)
         consulta1.promocoesAplicadasIds = idsPromocoesAplicadas
-        registrarConsulta(paciente, profissional, consulta1)
 
-        consulta2.aplicarDesconto(descontoTotal)
-        consulta2.promocoesAplicadasIds = idsPromocoesAplicadas
-        registrarConsulta(paciente, profissional, consulta2)
+        val consulta2 = Consulta(
+            idConsulta = UUID.randomUUID().toString(),
+            pacienteID = paciente.idPaciente,
+            nomePaciente = paciente.nomePaciente,
+            profissionalID = profissional.idProfissional,
+            nomeProfissional = profissional.nomeProfissional,
+            consultorioId = consultorioId,
+            area = profissional.areaAtuacaoId,
+            dataHoraConsulta = null,
+            statusConsulta = StatusConsulta.PENDENTE,
+            valorBase = profissional.valorBaseConsulta,
+            valorConsulta = profissional.valorBaseConsulta * (1 - descontoTotal / 100),
+            descontoPercentual = descontoTotal,
+            duracaoEmMinutos = profissional.duracaoPadraoMinutos,
+            promocoesAplicadasIds = idsPromocoesAplicadas
+        )
+        var consulta1Salva: Consulta? = null
+        var consulta2Salva: Consulta? = null
+        try {
+            consulta1Salva = consultaRepository.salvar(consulta1)
+            consulta2Salva = consultaRepository.salvar(consulta2)
 
-        return listOf(consulta1, consulta2)
+            val dataHoraLocal1 = consulta1Salva.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
+            profissional.agenda.bloquearHorario(dataHoraLocal1, consulta1Salva)
+
+            profissionalRepository.atualizar(profissional)
+
+            val consultasSalvas = listOf(consulta1Salva!!, consulta2Salva!!)
+
+            return coroutineScope {
+                consultasSalvas.map {
+                    async { it.toResponse(consultorioRepository, areaAtuacaoRepository) }
+                }.awaitAll()
+            }
+
+        } catch (e: Exception) {
+            if (consulta1Salva != null) {
+                try {
+                    consultaRepository.deletarPorId(consulta1Salva.idConsulta)
+                    println("ROLLBACK: Consulta ${consulta1Salva.idConsulta} deletada.")
+                } catch (rbError: Exception) {
+                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consulta1Salva.idConsulta}: ${rbError.message}")
+                }
+            }
+            if (consulta2Salva != null) {
+                try {
+                    consultaRepository.deletarPorId(consulta2Salva.idConsulta)
+                    println("ROLLBACK: Consulta ${consulta2Salva.idConsulta} deletada.")
+                } catch (rbError: Exception) {
+                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consulta2Salva.idConsulta}: ${rbError.message}")
+                }
+            }
+            throw ConflitoDeEstadoException("Falha ao registrar agendamento duplo: ${e.message}")
+        }
     }
 
     @OptIn(ExperimentalTime::class)
     suspend fun agendarConsultasEmPacote(
         paciente: Paciente,
         profissional: Profissional,
+        consultorioId: String,
         dataPrimeiraConsulta: LocalDateTime,
         promocaoIdDoPacote: String,
         usuarioLogado: User,
         codigoPromocional: String? = null
-    ): List<Consulta> {
+    ): List<ConsultaResponse> {
 
         val promocaoPacote = promocaoService.buscarPromocoesPorIds(listOf(promocaoIdDoPacote)).firstOrNull()
             ?: throw RecursoNaoEncontradoException("Promoção (Pacote) não encontrada.")
@@ -115,13 +160,13 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
-        val primeiraConsulta = criarEValidarConsulta(paciente, profissional, dataPrimeiraConsulta)
+        val primeiraConsulta = criarEValidarConsulta(paciente, profissional, dataPrimeiraConsulta, consultorioId)
         primeiraConsulta.statusConsulta = StatusConsulta.AGENDADA
 
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
             profissional = profissional,
-            dataConsultaProposta = dataPrimeiraConsulta.toInstant(fusoHorarioPadrao),
+            dataConsultaProposta = primeiraConsulta.dataHoraConsulta!!,
             quantidadeConsultasSimultaneas = quantidadeTotal,
             codigoPromocionalInput = codigoPromocional
         )
@@ -142,26 +187,59 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                 nomePaciente = paciente.nomePaciente,
                 profissionalID = profissional.idProfissional,
                 nomeProfissional = profissional.nomeProfissional,
+                consultorioId = consultorioId,
                 area = profissional.areaAtuacaoId,
                 dataHoraConsulta = null,
                 statusConsulta = StatusConsulta.PENDENTE,
                 valorBase = profissional.valorBaseConsulta,
                 valorConsulta = profissional.valorBaseConsulta * (1 - descontoTotal / 100),
                 descontoPercentual = descontoTotal,
+                duracaoEmMinutos = profissional.duracaoPadraoMinutos,
                 promocoesAplicadasIds = idsPromocoesAplicadas
             )
         }
 
-        val consultasSalvas = mutableListOf<Consulta>()
+        var consultaAgendadaSalva: Consulta? = null
+        val consultasCreditoSalvas = mutableListOf<Consulta>()
+        try {
+            consultaAgendadaSalva = consultaRepository.salvar(primeiraConsulta)
 
-        registrarConsulta(paciente, profissional, primeiraConsulta)
-        consultasSalvas.add(primeiraConsulta)
+            consultasCredito.forEach { credito ->
+                consultasCreditoSalvas.add(consultaRepository.salvar(credito))
+            }
 
-        consultasCredito.forEach { credito ->
-            consultasSalvas.add(consultaRepository.salvar(credito))
+            val dataHoraLocal = consultaAgendadaSalva.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
+            profissional.agenda.bloquearHorario(dataHoraLocal, consultaAgendadaSalva)
+
+            profissionalRepository.atualizar(profissional)
+
+            val consultasSalvas = listOf(consultaAgendadaSalva!!) + consultasCreditoSalvas
+
+            return coroutineScope {
+                consultasSalvas.map {
+                    async { it.toResponse(consultorioRepository, areaAtuacaoRepository) }
+                }.awaitAll()
+            }
+
+        } catch (e: Exception) {
+            if (consultaAgendadaSalva != null) {
+                try {
+                    consultaRepository.deletarPorId(consultaAgendadaSalva.idConsulta)
+                    println("ROLLBACK: Consulta ${consultaAgendadaSalva.idConsulta} deletada.")
+                } catch (rbError: Exception) {
+                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consultaAgendadaSalva.idConsulta}: ${rbError.message}")
+                }
+            }
+            consultasCreditoSalvas.forEach { creditoSalvo ->
+                try {
+                    consultaRepository.deletarPorId(creditoSalvo.idConsulta)
+                    println("ROLLBACK: Consulta crédito ${creditoSalvo.idConsulta} deletada.")
+                } catch (rbError: Exception) {
+                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta crédito ${creditoSalvo.idConsulta}: ${rbError.message}")
+                }
+            }
+            throw ConflitoDeEstadoException("Falha ao registrar pacote: ${e.message}")
         }
-
-        return consultasSalvas
     }
 
     @OptIn(ExperimentalTime::class)
@@ -169,10 +247,11 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         paciente: Paciente,
         profissional: Profissional,
         dataHora: LocalDateTime,
+        consultorioId: String,
         usuarioLogado: User,
         codigoPromocional: String? = null,
         quantidade: Int = 1
-    ): Consulta {
+    ): ConsultaResponse {
         verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = false)
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
@@ -184,12 +263,12 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
         }
 
-        val novaConsulta = criarEValidarConsulta(paciente, profissional, dataHora)
+        val novaConsulta = criarEValidarConsulta(paciente, profissional, dataHora, consultorioId)
 
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
             profissional = profissional,
-            dataConsultaProposta = novaConsulta.dataHoraConsulta!!.toInstant(fusoHorarioPadrao),
+            dataConsultaProposta = novaConsulta.dataHoraConsulta!!,
             quantidadeConsultasSimultaneas = quantidade,
             codigoPromocionalInput = codigoPromocional
         )
@@ -198,8 +277,30 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         novaConsulta.aplicarDesconto(descontoTotal)
         novaConsulta.promocoesAplicadasIds = promocoesAplicadas.map { it.idPromocao }
 
-        registrarConsulta(paciente, profissional, novaConsulta)
-        return novaConsulta
+        var consultaSalva: Consulta? = null
+        try {
+            consultaSalva = consultaRepository.salvar(novaConsulta)
+
+            if (consultaSalva.dataHoraConsulta != null) {
+                val dataHoraLocal = consultaSalva.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
+                profissional.agenda.bloquearHorario(dataHoraLocal, consultaSalva)
+
+                profissionalRepository.atualizar(profissional)
+            }
+
+            return consultaSalva!!.toResponse(consultorioRepository, areaAtuacaoRepository)
+
+        } catch (e: Exception) {
+            if (consultaSalva != null) {
+                try {
+                    consultaRepository.deletarPorId(consultaSalva.idConsulta)
+                    println("ROLLBACK: Consulta ${consultaSalva.idConsulta} deletada devido a falha no bloqueio da agenda.")
+                } catch (rbError: Exception) {
+                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consultaSalva.idConsulta}: ${rbError.message}")
+                }
+            }
+            throw ConflitoDeEstadoException("Falha ao registrar agendamento: ${e.message}")
+        }
     }
 
     companion object{
@@ -218,23 +319,35 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         }
     }
 
+    @OptIn(ExperimentalTime::class)
     private suspend fun criarEValidarConsulta(
         paciente: Paciente,
         profissional: Profissional,
-        dataHora: LocalDateTime
+        dataHora: LocalDateTime,
+        consultorioId: String
     ): Consulta {
+
+        profissional.diasDeTrabalho.firstOrNull {
+            it.diaDaSemana == dataHora.dayOfWeek &&
+                    it.consultorioId == consultorioId &&
+                    dataHora.time >= it.horarioInicio &&
+                    dataHora.time < it.horarioFim
+        } ?: throw ConflitoDeEstadoException("O profissional não atende neste consultório ($consultorioId) neste dia/horário.")
+
         val novaConsulta = Consulta(
             pacienteID = paciente.idPaciente,
             nomePaciente = paciente.nomePaciente,
             profissionalID = profissional.idProfissional,
             nomeProfissional = profissional.nomeProfissional,
+            consultorioId = consultorioId,
             area = profissionalRepository.buscarPorId(profissional.idProfissional)?.areaAtuacaoId ?: "Desconhecida",
-            dataHoraConsulta = dataHora,
+            dataHoraConsulta = dataHora.toInstant(fusoHorarioPadrao),
             statusConsulta = StatusConsulta.AGENDADA,
             valorBase = profissional.valorBaseConsulta,
-            valorConsulta = profissional.valorBaseConsulta
+            valorConsulta = profissional.valorBaseConsulta,
+            duracaoEmMinutos = profissional.duracaoPadraoMinutos
         )
-        val duracaoDaConsulta = novaConsulta.duracaoEmMinutos.minutes
+        val duracaoDaConsulta = profissional.duracaoPadraoMinutos.minutes
 
         if (!profissional.agenda.estaDisponivel(dataHora, duracaoDaConsulta)) {
             throw ConflitoDeEstadoException("Horário do profissional indisponível")
@@ -244,13 +357,6 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         }
 
         return novaConsulta
-    }
-
-    private suspend fun registrarConsulta(paciente: Paciente, profissional: Profissional, consulta: Consulta) {
-        consultaRepository.salvar(consulta)
-        if (consulta.dataHoraConsulta != null) {
-            profissional.agenda.bloquearHorario(consulta.dataHoraConsulta!!, consulta)
-        }
     }
 
     private suspend fun checarPermissaoAgendamento(
@@ -292,20 +398,15 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             if (userExistente.role != Role.PACIENTE) {
                 throw InputInvalidoException("Este email pertence a um membro da equipe, não a um paciente.")
             }
-            // 5. Buscar o perfil Paciente associado
             val pacienteExistente = pacienteRepository.buscarPorUserId(userExistente.idUsuario)
                 ?: throw RecursoNaoEncontradoException("Usuário encontrado, mas perfil de paciente associado não existe.")
 
-            // 6. Verificar se o paciente existente está ATIVO
             if (pacienteExistente.status == StatusUsuario.INATIVO) {
-                // Lança exceção específica com o ID do paciente
                 throw PacienteInativoException(
                     "Este paciente existe mas está INATIVO. Reative-o para agendar.",
                     pacienteExistente.idPaciente
                 )
-                // O frontend pode capturar PacienteInativoException e mostrar o botão "Reativar?" (chamando desbloquearEmailPaciente)
             } else if (pacienteExistente.status != StatusUsuario.ATIVO) {
-                // Outros status não ativos (CONVIDADO, RECUSADO - não deveriam acontecer para Paciente, mas por segurança)
                 throw ConflitoDeEstadoException("Este paciente existe mas não está ativo no sistema (${pacienteExistente.status}).")
             }
             return pacienteExistente
@@ -324,7 +425,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             .filter {
                 it.statusConsulta == StatusConsulta.AGENDADA &&
                         it.dataHoraConsulta != null &&
-                        it.dataHoraConsulta!!.toInstant(fusoHorarioPadrao) > agora
+                        it.dataHoraConsulta!! > agora
             }
 
         if (isAgendamentoDuplo) {

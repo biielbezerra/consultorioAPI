@@ -33,11 +33,19 @@ class SupabaseConsultaRepository : ConsultaRepository {
     }
 
     override suspend fun buscarPorId(id: String): Consulta? {
-        return table.select {
-            filter {
-                eq("idConsulta", id)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idConsulta", id)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Consulta>()
+            response.decodeList<Consulta>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [ConsultaRepo] - FALHA NA DECODIFICAÇÃO: ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorPacienteId(pacienteId: String): List<Consulta> {
@@ -70,5 +78,9 @@ class SupabaseConsultaRepository : ConsultaRepository {
             }
             order("dataHoraConsulta", Order.ASCENDING)
         }.decodeList()
+    }
+
+    override suspend fun deletarPorId(id: String) {
+        table.delete { filter { eq("idConsulta", id) } }
     }
 }

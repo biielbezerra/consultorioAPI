@@ -16,11 +16,19 @@ class SupabaseAreaAtuacaoRepository : AreaAtuacaoRepository {
     }
 
     override suspend fun buscarPorId(id: String): AreaAtuacao? {
-        return table.select {
-            filter {
-                eq("idArea", id)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idArea", id)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<AreaAtuacao>()
+            response.decodeList<AreaAtuacao>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [AreaAtuacaoRepo] - FALHA NA DECODIFICAÇÃO: ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun listarTodas(): List<AreaAtuacao> {

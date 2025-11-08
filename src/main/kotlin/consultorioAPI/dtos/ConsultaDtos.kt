@@ -7,6 +7,7 @@ import kotlinx.datetime.LocalDateTime
 @Serializable
 data class AgendamentoRequest(
     val profissionalId: String,
+    val consultorioId: String,
     val dataHora: LocalDateTime,
     val pacienteEmail: String,
     val pacienteNome: String? = null,
@@ -16,8 +17,8 @@ data class AgendamentoRequest(
 @Serializable
 data class AgendamentoDuploRequest(
     val profissionalId: String,
-    val dataHora1: LocalDateTime,
-    val dataHora2: LocalDateTime,
+    val consultorioId: String,
+    val dataPrimeiraConsulta: LocalDateTime,
     val pacienteEmail: String,
     val pacienteNome: String? = null,
     val codigoPromocional: String? = null
@@ -26,6 +27,7 @@ data class AgendamentoDuploRequest(
 @Serializable
 data class AgendamentoPacoteRequest(
     val profissionalId: String,
+    val consultorioId: String,
     val promocaoIdDoPacote: String,
     val dataPrimeiraConsulta: LocalDateTime,
     val pacienteEmail: String,

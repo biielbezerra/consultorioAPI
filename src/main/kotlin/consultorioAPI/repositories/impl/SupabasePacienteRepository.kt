@@ -28,12 +28,20 @@ class SupabasePacienteRepository : PacienteRepository {
     }
 
     override suspend fun buscarPorId(id: String): Paciente? {
-        return table.select {
-            filter {
-                eq("idPaciente", id)
-                eq("isDeletado", false)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("idPaciente", id)
+                    eq("isDeletado", false)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Paciente>()
+            response.decodeList<Paciente>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [PacienteRepo] - FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun buscarPorNome(nome: String): List<Paciente> {
@@ -46,12 +54,20 @@ class SupabasePacienteRepository : PacienteRepository {
     }
 
     override suspend fun buscarPorUserId(userId: String): Paciente? {
-        return table.select {
-            filter {
-                eq("userId", userId)
-                eq("isDeletado", false)
+        return try {
+            val response = table.select {
+                filter {
+                    eq("userId", userId)
+                    eq("isDeletado", false)
+                }
+                limit(1)
             }
-        }.decodeAsOrNull<Paciente>()
+            response.decodeList<Paciente>().firstOrNull()
+        } catch (e: Exception) {
+            println("DEBUG [PacienteRepo] - FALHA NA DECODIFICAÇÃO (buscarPorUserId): ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 
     override suspend fun listarTodos(): List<Paciente> {
