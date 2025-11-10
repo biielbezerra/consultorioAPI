@@ -18,6 +18,7 @@ fun Application.configureStatusPages() {
 
         // 400 Bad Request (Input Inválido)
         exception<InputInvalidoException> { call, cause ->
+            call.application.log.warn("Input inválido: ${cause.message}")
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(cause.message ?: "Input inválido."))
         }
 
@@ -28,37 +29,43 @@ fun Application.configureStatusPages() {
 
         // 403 Forbidden (Sem permissão / E-mail bloqueado)
         exception<NaoAutorizadoException> { call, cause ->
+            call.application.log.warn("Acesso negado: ${cause.message}")
             call.respond(HttpStatusCode.Forbidden, ErrorResponse(cause.message ?: "Acesso negado."))
         }
         exception<EmailBloqueadoException> { call, cause ->
+            call.application.log.warn("Tentativa de acesso com email bloqueado: ${cause.message}")
             call.respond(HttpStatusCode.Forbidden, ErrorResponse(cause.message ?: "Este e-mail está bloqueado."))
         }
 
         // 404 Not Found (Recurso não existe)
         exception<RecursoNaoEncontradoException> { call, cause ->
+            call.application.log.info("Recurso não encontrado: ${cause.message}")
             call.respond(HttpStatusCode.NotFound, ErrorResponse(cause.message ?: "Recurso não encontrado."))
         }
         status(HttpStatusCode.NotFound) { call, status -> // Pega 404 de rotas não encontradas
+            call.application.log.info("Rota não encontrada: ${call.request.path()}")
             call.respond(status, ErrorResponse("Recurso não encontrado: ${call.request.path()}"))
         }
 
         // 409 Conflict (Conflito de estado, ex: e-mail já existe)
         exception<ConflitoDeEstadoException> { call, cause ->
+            call.application.log.warn("Conflito de estado: ${cause.message}")
             call.respond(HttpStatusCode.Conflict, ErrorResponse(cause.message ?: "Conflito de estado."))
         }
         exception<PacienteInativoException> { call, cause ->
             // Você pode querer um DTO de erro especial aqui para enviar o pacienteId
+            call.application.log.info("Conflito: Paciente inativo: ${cause.message}")
             call.respond(HttpStatusCode.Conflict, ErrorResponse(cause.message ?: "Paciente inativo."))
         }
-        exception<IllegalStateException> { call, cause -> // Pega o erro de rollback
-            call.respond(HttpStatusCode.Conflict, ErrorResponse(cause.message ?: "Ação não pôde ser completada."))
+        exception<IllegalStateException> { call, cause ->
+            call.application.log.error("Erro 500 (IllegalStateException) capturado:", cause)
+            call.respond(HttpStatusCode.InternalServerError, ErrorResponse(cause.message ?: "Ação não pôde ser completada."))
         }
 
         // 500 Internal Server Error (Erros inesperados, ex: NullPointerException)
         exception<Throwable> { call, cause ->
             // Loga o erro completo no seu console (para você ver)
             call.application.log.error("Erro 500 não tratado capturado pelo StatusPages", cause)
-
             // Responde ao usuário com um JSON limpo
             call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Erro interno no servidor."))
         }

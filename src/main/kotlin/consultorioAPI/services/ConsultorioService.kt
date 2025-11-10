@@ -18,6 +18,7 @@ import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.math.min
 import kotlin.time.ExperimentalTime
+import org.slf4j.LoggerFactory
 
 class ConsultorioService (private val consultorioRepository: ConsultorioRepository,
                           private val consultaRepository: ConsultaRepository,
@@ -32,7 +33,10 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                           private val areaAtuacaoRepository: AreaAtuacaoRepository
 ) {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     suspend fun cadastroConsultorio(nome: String, endereco: String, usuarioLogado: User): ConsultorioResponse {
+        log.info("Admin ${usuarioLogado.idUsuario} cadastrando consultório: $nome")
 
         if(!usuarioLogado.isSuperAdmin){
             throw NaoAutorizadoException("Apenas Super Admins podem cadastrar consultórios.")
@@ -54,6 +58,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         codigoPromocional: String? = null,
         quantidade: Int = 2
     ): List<ConsultaResponse> {
+        log.info("Iniciando agendamento de consulta dupla para Paciente ${paciente.idPaciente} com Prof ${profissional.idProfissional}")
         verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = true)
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
@@ -108,6 +113,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             profissional.agenda.bloquearHorario(dataHoraLocal1, consulta1Salva)
 
             profissionalRepository.atualizar(profissional)
+            log.info("Consulta dupla ${consulta1Salva.idConsulta} e ${consulta2Salva.idConsulta} salvas. Agenda do Prof ${profissional.idProfissional} atualizada.")
 
             val consultasSalvas = listOf(consulta1Salva!!, consulta2Salva!!)
 
@@ -118,20 +124,21 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
 
         } catch (e: Exception) {
+            log.error("Falha ao registrar agendamento duplo para Paciente ${paciente.idPaciente}. Iniciando rollback.", e)
             if (consulta1Salva != null) {
                 try {
                     consultaRepository.deletarPorId(consulta1Salva.idConsulta)
-                    println("ROLLBACK: Consulta ${consulta1Salva.idConsulta} deletada.")
+                    log.warn("ROLLBACK: Consulta ${consulta1Salva.idConsulta} deletada.")
                 } catch (rbError: Exception) {
-                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consulta1Salva.idConsulta}: ${rbError.message}")
+                    log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consulta1Salva.idConsulta}", rbError)
                 }
             }
             if (consulta2Salva != null) {
                 try {
                     consultaRepository.deletarPorId(consulta2Salva.idConsulta)
-                    println("ROLLBACK: Consulta ${consulta2Salva.idConsulta} deletada.")
+                    log.warn("ROLLBACK: Consulta ${consulta2Salva.idConsulta} deletada.")
                 } catch (rbError: Exception) {
-                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consulta2Salva.idConsulta}: ${rbError.message}")
+                    log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consulta2Salva.idConsulta}", rbError)
                 }
             }
             throw ConflitoDeEstadoException("Falha ao registrar agendamento duplo: ${e.message}")
@@ -148,6 +155,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         usuarioLogado: User,
         codigoPromocional: String? = null
     ): List<ConsultaResponse> {
+        log.info("Iniciando agendamento de pacote para Paciente ${paciente.idPaciente} com Prof ${profissional.idProfissional}")
 
         val promocaoPacote = promocaoService.buscarPromocoesPorIds(listOf(promocaoIdDoPacote)).firstOrNull()
             ?: throw RecursoNaoEncontradoException("Promoção (Pacote) não encontrada.")
@@ -157,6 +165,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         }
 
         val quantidadeTotal = promocaoPacote.quantidadeMinimaConsultas!!
+        log.debug("Pacote detectado: $quantidadeTotal consultas.")
 
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
@@ -198,20 +207,24 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                 promocoesAplicadasIds = idsPromocoesAplicadas
             )
         }
+        log.debug("Criado ${consultasCredito.size} consultas 'crédito'.")
 
         var consultaAgendadaSalva: Consulta? = null
         val consultasCreditoSalvas = mutableListOf<Consulta>()
         try {
             consultaAgendadaSalva = consultaRepository.salvar(primeiraConsulta)
+            log.info("Consulta agendada ${consultaAgendadaSalva.idConsulta} salva.")
 
             consultasCredito.forEach { credito ->
                 consultasCreditoSalvas.add(consultaRepository.salvar(credito))
             }
+            log.info("${consultasCreditoSalvas.size} consultas crédito salvas.")
 
             val dataHoraLocal = consultaAgendadaSalva.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
             profissional.agenda.bloquearHorario(dataHoraLocal, consultaAgendadaSalva)
 
             profissionalRepository.atualizar(profissional)
+            log.info("Agenda do Prof ${profissional.idProfissional} atualizada.")
 
             val consultasSalvas = listOf(consultaAgendadaSalva!!) + consultasCreditoSalvas
 
@@ -222,20 +235,21 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             }
 
         } catch (e: Exception) {
+            log.error("Falha ao registrar pacote para Paciente ${paciente.idPaciente}. Iniciando rollback.", e)
             if (consultaAgendadaSalva != null) {
                 try {
                     consultaRepository.deletarPorId(consultaAgendadaSalva.idConsulta)
-                    println("ROLLBACK: Consulta ${consultaAgendadaSalva.idConsulta} deletada.")
+                    log.warn("ROLLBACK: Consulta ${consultaAgendadaSalva.idConsulta} deletada.")
                 } catch (rbError: Exception) {
-                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consultaAgendadaSalva.idConsulta}: ${rbError.message}")
+                    log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consultaAgendadaSalva.idConsulta}", rbError)
                 }
             }
             consultasCreditoSalvas.forEach { creditoSalvo ->
                 try {
                     consultaRepository.deletarPorId(creditoSalvo.idConsulta)
-                    println("ROLLBACK: Consulta crédito ${creditoSalvo.idConsulta} deletada.")
+                    log.warn("ROLLBACK: Consulta crédito ${creditoSalvo.idConsulta} deletada.")
                 } catch (rbError: Exception) {
-                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta crédito ${creditoSalvo.idConsulta}: ${rbError.message}")
+                    log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta crédito ${creditoSalvo.idConsulta}", rbError)
                 }
             }
             throw ConflitoDeEstadoException("Falha ao registrar pacote: ${e.message}")
@@ -252,6 +266,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         codigoPromocional: String? = null,
         quantidade: Int = 1
     ): ConsultaResponse {
+        log.info("Iniciando agendamento de consulta avulsa para Paciente ${paciente.idPaciente} com Prof ${profissional.idProfissional} às $dataHora")
         verificarLimiteAgendamentosFuturos(paciente.idPaciente, isAgendamentoDuplo = false)
         checarPermissaoAgendamento(usuarioLogado, paciente)
 
@@ -264,6 +279,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         }
 
         val novaConsulta = criarEValidarConsulta(paciente, profissional, dataHora, consultorioId)
+        log.debug("Objeto de consulta preliminar criado: ${novaConsulta.idConsulta}")
 
         val promocoesAplicadas = promocaoService.buscarMelhorPromocaoAplicavel(
             paciente = paciente,
@@ -272,6 +288,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             quantidadeConsultasSimultaneas = quantidade,
             codigoPromocionalInput = codigoPromocional
         )
+        log.debug("Promoções aplicáveis encontradas: ${promocoesAplicadas.size}")
 
         val descontoTotal = calcularDescontoTotal(promocoesAplicadas)
         novaConsulta.aplicarDesconto(descontoTotal)
@@ -280,23 +297,26 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         var consultaSalva: Consulta? = null
         try {
             consultaSalva = consultaRepository.salvar(novaConsulta)
+            log.info("Consulta ${consultaSalva.idConsulta} salva no banco.")
 
             if (consultaSalva.dataHoraConsulta != null) {
                 val dataHoraLocal = consultaSalva.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
                 profissional.agenda.bloquearHorario(dataHoraLocal, consultaSalva)
 
                 profissionalRepository.atualizar(profissional)
+                log.info("Agenda do Prof ${profissional.idProfissional} atualizada.")
             }
 
             return consultaSalva!!.toResponse(consultorioRepository, areaAtuacaoRepository)
 
         } catch (e: Exception) {
+            log.error("Falha ao registrar agendamento para Paciente ${paciente.idPaciente}. Iniciando rollback.", e)
             if (consultaSalva != null) {
                 try {
                     consultaRepository.deletarPorId(consultaSalva.idConsulta)
-                    println("ROLLBACK: Consulta ${consultaSalva.idConsulta} deletada devido a falha no bloqueio da agenda.")
+                    log.warn("ROLLBACK: Consulta ${consultaSalva.idConsulta} deletada devido a falha no bloqueio da agenda.")
                 } catch (rbError: Exception) {
-                    println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consultaSalva.idConsulta}: ${rbError.message}")
+                    log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar consulta ${consultaSalva.idConsulta}", rbError)
                 }
             }
             throw ConflitoDeEstadoException("Falha ao registrar agendamento: ${e.message}")
@@ -326,6 +346,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         dataHora: LocalDateTime,
         consultorioId: String
     ): Consulta {
+        log.debug("Validando criação de consulta: Pac=${paciente.idPaciente}, Prof=${profissional.idProfissional}, Data=$dataHora, Local=$consultorioId")
 
         profissional.diasDeTrabalho.firstOrNull {
             it.diaDaSemana == dataHora.dayOfWeek &&
@@ -333,6 +354,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                     dataHora.time >= it.horarioInicio &&
                     dataHora.time < it.horarioFim
         } ?: throw ConflitoDeEstadoException("O profissional não atende neste consultório ($consultorioId) neste dia/horário.")
+        log.debug("Validação de local de atendimento OK.")
 
         val novaConsulta = Consulta(
             pacienteID = paciente.idPaciente,
@@ -355,6 +377,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         if (!pacienteService.isPacienteDisponivel(paciente, dataHora, duracaoDaConsulta)) {
             throw ConflitoDeEstadoException("Horário do paciente indisponível")
         }
+        log.debug("Validação de disponibilidade OK.")
 
         return novaConsulta
     }
@@ -363,6 +386,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         usuarioLogado: User,
         pacienteDaConsulta: Paciente
     ) {
+        log.debug("Checando permissão de agendamento: User ${usuarioLogado.idUsuario} (Role ${usuarioLogado.role}) agendando para Paciente ${pacienteDaConsulta.idPaciente}")
 
         if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) return
 
@@ -385,6 +409,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         nome: String,
         usuarioLogado: User
     ): Paciente {
+        log.info("Staff ${usuarioLogado.idUsuario} buscando ou pré-cadastrando paciente: $email")
         if (usuarioLogado.role == Role.PACIENTE) {
             throw NaoAutorizadoException("Pacientes não podem usar esta função de busca/cadastro.")
         }
@@ -395,6 +420,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
         val userExistente = userRepository.buscarPorEmail(email)
 
         if (userExistente != null) {
+            log.debug("Usuário existente encontrado para $email. Verificando perfil de paciente.")
             if (userExistente.role != Role.PACIENTE) {
                 throw InputInvalidoException("Este email pertence a um membro da equipe, não a um paciente.")
             }
@@ -402,6 +428,7 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
                 ?: throw RecursoNaoEncontradoException("Usuário encontrado, mas perfil de paciente associado não existe.")
 
             if (pacienteExistente.status == StatusUsuario.INATIVO) {
+                log.warn("Tentativa de agendamento para paciente INATIVO: ${pacienteExistente.idPaciente}")
                 throw PacienteInativoException(
                     "Este paciente existe mas está INATIVO. Reative-o para agendar.",
                     pacienteExistente.idPaciente
@@ -409,11 +436,13 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
             } else if (pacienteExistente.status != StatusUsuario.ATIVO) {
                 throw ConflitoDeEstadoException("Este paciente existe mas não está ativo no sistema (${pacienteExistente.status}).")
             }
+            log.info("Paciente existente ${pacienteExistente.idPaciente} encontrado e ATIVO.")
             return pacienteExistente
         } else {
             if (nome.isBlank()) {
                 throw InputInvalidoException("Nome do paciente é obrigatório para pré-cadastro.")
             }
+            log.info("Paciente não encontrado. Iniciando pré-cadastro pelo staff para: $email")
             return usuarioService.preCadastrarPacientePeloStaff(nome, email, usuarioLogado)
         }
     }
@@ -430,10 +459,12 @@ class ConsultorioService (private val consultorioRepository: ConsultorioReposito
 
         if (isAgendamentoDuplo) {
             if (consultasFuturasAgendadas.isNotEmpty()) {
+                log.warn("Agendamento duplo bloqueado para Paciente $pacienteId: já possui ${consultasFuturasAgendadas.size} consultas futuras.")
                 throw ConflitoDeEstadoException("Não é possível agendar consulta dupla inicial se já existem agendamentos futuros.")
             }
         } else {
             if (consultasFuturasAgendadas.isNotEmpty()) {
+                log.warn("Agendamento avulso bloqueado para Paciente $pacienteId: já possui ${consultasFuturasAgendadas.size} consultas futuras.")
                 throw ConflitoDeEstadoException("Você já possui uma consulta futura agendada. Aguarde a realização ou cancele-a para agendar uma nova.")
             }
         }

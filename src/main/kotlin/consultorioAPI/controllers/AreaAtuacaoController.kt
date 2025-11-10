@@ -14,6 +14,7 @@ import consultorioAPI.mappers.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.slf4j.LoggerFactory
 
 @Serializable
 data class CriarAreaAtuacaoRequest(

@@ -12,6 +12,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import org.slf4j.LoggerFactory
 
 @kotlinx.serialization.Serializable
 data class OnboardingRequest(val nome: String)

@@ -18,6 +18,7 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
+import org.slf4j.LoggerFactory
 
 class UsuarioService(private val userRepository: UserRepository,
                      private val pacienteRepository: PacienteRepository,
@@ -28,6 +29,7 @@ class UsuarioService(private val userRepository: UserRepository,
                      private val consultaRepository: ConsultaRepository
 ) {
 
+    private val log = LoggerFactory.getLogger(javaClass)
     private val firebaseAuth = FirebaseAuth.getInstance()
 
     suspend fun preCadastrarEquipe(
@@ -38,6 +40,7 @@ class UsuarioService(private val userRepository: UserRepository,
         numeroRegistro: String? = null,
         usuarioLogado: User
     ): MeuPerfilResponse {
+        log.info("Iniciando pré-cadastro para equipe. Email: ${email}, Role: ${role} por ${usuarioLogado.idUsuario}")
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas Super Admins podem pré-cadastrar usuários.")
         }
@@ -59,12 +62,14 @@ class UsuarioService(private val userRepository: UserRepository,
 
             val authUser = firebaseAuth.createUser(request)
             idUsuarioFirebase = authUser.uid
+            log.info("Usuário criado no Firebase Auth: $idUsuarioFirebase")
 
             // TODO: Enviar link de redefinição de senha do Firebase
             // val link = firebaseAuth.generatePasswordResetLink(email)
             // Enviar 'link' por email
 
         } catch (e: Exception) {
+            log.error("Falha ao criar usuário no Firebase Auth", e)
             throw ConflitoDeEstadoException("Falha ao criar usuário no Firebase Auth: ${e.message}")
         }
 
@@ -94,6 +99,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     } else {
                         emptyMap()
                     }
+                    log.debug("Atributos finais do profissional: $atributosFinais")
 
                     val novoProfissional = Profissional(
                         nomeProfissional = nome,
@@ -104,6 +110,7 @@ class UsuarioService(private val userRepository: UserRepository,
                         status = StatusUsuario.CONVIDADO
                     )
                     profissionalRepository.salvar(novoProfissional)
+                    log.info("Perfil Profissional salvo para: $idUsuarioFirebase")
                 }
                 Role.RECEPCIONISTA -> {
                     val novaRecepcionista = Recepcionista(
@@ -112,14 +119,18 @@ class UsuarioService(private val userRepository: UserRepository,
                         status = StatusUsuario.CONVIDADO
                     )
                     recepcionistaRepository.salvar(novaRecepcionista)
+                    log.info("Perfil Recepcionista salvo para: $idUsuarioFirebase")
                 }
                 else -> {}
             }
         } catch (e: Exception) {
+            log.error("Falha ao salvar perfil local, iniciando rollback para $idUsuarioFirebase", e)
             userRepository.deletarPorId(usuarioSalvoLocal.idUsuario)
             try {
                 firebaseAuth.deleteUser(usuarioSalvoLocal.idUsuario)
+                log.info("Rollback no Firebase realizado para usuário: $idUsuarioFirebase")
             } catch (authError: Exception) {
+                log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar usuário $idUsuarioFirebase do Firebase", authError)
             }
             throw e
         }
@@ -130,6 +141,7 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun completarCadastro(token: String, senhaNova: String): MeuPerfilResponse {
+        log.info("Tentativa de completar cadastro com token: $token")
         val userEncontrado = userRepository.buscarPorToken(token)
             ?: throw RecursoNaoEncontradoException("Convite inválido ou expirado.")
 
@@ -143,7 +155,9 @@ class UsuarioService(private val userRepository: UserRepository,
             val request = UserRecord.UpdateRequest(userEncontrado.idUsuario)
                 .setPassword(senhaNova)
             firebaseAuth.updateUser(request)
+            log.info("Senha atualizada no Firebase para User: ${userEncontrado.idUsuario}")
         } catch (e: Exception) {
+            log.error("Falha ao atualizar senha no Firebase Auth para User: ${userEncontrado.idUsuario}", e)
             throw ConflitoDeEstadoException("Falha ao atualizar senha no Firebase Auth: ${e.message}")
         }
 
@@ -151,6 +165,7 @@ class UsuarioService(private val userRepository: UserRepository,
         userEncontrado.conviteToken = null
 
         val usuarioAtualizado = userRepository.atualizar(userEncontrado)
+        log.info("User ${usuarioAtualizado.idUsuario} atualizado para ATIVO no Supabase")
 
         when (usuarioAtualizado.role) {
             Role.PROFISSIONAL -> {
@@ -158,14 +173,15 @@ class UsuarioService(private val userRepository: UserRepository,
                     ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado.")
                 perfil.status = StatusUsuario.ATIVO
                 profissionalRepository.atualizar(perfil)
+                log.info("Perfil Profissional ${perfil.idProfissional} atualizado para ATIVO")
             }
             Role.RECEPCIONISTA -> {
                 val perfil = recepcionistaRepository.buscarPorUserId(userEncontrado.idUsuario)
                     ?: throw RecursoNaoEncontradoException("Perfil de recepcionista não encontrado.")
                 perfil.status = StatusUsuario.ATIVO
                 recepcionistaRepository.atualizar(perfil)
+                log.info("Perfil Recepcionista ${perfil.idRecepcionista} atualizado para ATIVO")
             }
-            Role.SUPER_ADMIN -> {}
             else -> {}
         }
 
@@ -178,6 +194,7 @@ class UsuarioService(private val userRepository: UserRepository,
         email: String,
         usuarioLogado: User
     ): Paciente {
+        log.info("Staff ${usuarioLogado.idUsuario} pré-cadastrando paciente: $email")
         if (usuarioLogado.role == Role.PACIENTE) {
             throw NaoAutorizadoException("Pacientes não podem pré-cadastrar outros pacientes.")
         }
@@ -198,8 +215,9 @@ class UsuarioService(private val userRepository: UserRepository,
 
             val authUser = firebaseAuth.createUser(request)
             idUsuarioFirebase = authUser.uid
-
+            log.info("Usuário criado no Firebase Auth para paciente: $idUsuarioFirebase")
         } catch (e: Exception) {
+            log.error("Falha ao criar usuário no Firebase Auth para paciente: $email", e)
             throw ConflitoDeEstadoException("Falha ao criar usuário no Firebase Auth: ${e.message}")
         }
 
@@ -209,6 +227,7 @@ class UsuarioService(private val userRepository: UserRepository,
             role = Role.PACIENTE
         )
         val usuarioSalvo = userRepository.salvar(newUser)
+        log.info("User (paciente) salvo no Supabase: $idUsuarioFirebase")
 
         val newPaciente = Paciente(
             nomePaciente = nome,
@@ -218,6 +237,7 @@ class UsuarioService(private val userRepository: UserRepository,
         newPaciente.dataCadastro = Clock.System.now()
 
         val pacienteSalvo = pacienteRepository.salvar(newPaciente)
+        log.info("Perfil Paciente salvo no Supabase: ${pacienteSalvo.idPaciente}")
 
         val link = firebaseAuth.generatePasswordResetLink(email)
 
@@ -227,6 +247,7 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun recusarConvite(token: String) {
+        log.info("Tentativa de recusar convite com token: $token")
         val userAlvo = userRepository.buscarPorToken(token)
             ?: throw RecursoNaoEncontradoException("Convite inválido ou expirado.")
 
@@ -237,6 +258,7 @@ class UsuarioService(private val userRepository: UserRepository,
         userAlvo.status = StatusUsuario.RECUSADO
         userAlvo.conviteToken = null
         userRepository.atualizar(userAlvo)
+        log.info("User ${userAlvo.idUsuario} atualizado para RECUSADO")
 
         when (userAlvo.role) {
             Role.PROFISSIONAL -> {
@@ -244,6 +266,7 @@ class UsuarioService(private val userRepository: UserRepository,
                 if (perfil != null) {
                     perfil.status = StatusUsuario.RECUSADO
                     profissionalRepository.atualizar(perfil)
+                    log.info("Perfil Profissional ${perfil.idProfissional} atualizado para RECUSADO")
                 }
             }
             Role.RECEPCIONISTA -> {
@@ -251,6 +274,7 @@ class UsuarioService(private val userRepository: UserRepository,
                 if (perfil != null) {
                     perfil.status = StatusUsuario.RECUSADO
                     recepcionistaRepository.atualizar(perfil)
+                    log.info("Perfil Recepcionista ${perfil.idRecepcionista} atualizado para RECUSADO")
                 }
             }
             else -> {}
@@ -259,6 +283,7 @@ class UsuarioService(private val userRepository: UserRepository,
 
     @OptIn(ExperimentalTime::class)
     suspend fun registrarNovoPaciente(dto: RegistroPacienteRequest): PacienteResponse {
+        log.info("Iniciando registro de novo paciente: ${dto.email}")
 
         validarForcaDaSenha(dto.senha)
 
@@ -280,8 +305,10 @@ class UsuarioService(private val userRepository: UserRepository,
 
             val authUser = firebaseAuth.createUser(request)
             idUsuarioFirebase = authUser.uid
+            log.info("Usuário (paciente) criado no Firebase Auth: $idUsuarioFirebase")
 
         } catch (e: Exception) {
+            log.warn("Falha ao criar usuário no Firebase: ${e.message}")
             throw ConflitoDeEstadoException("Falha ao criar usuário no Firebase: ${e.message}")
         }
 
@@ -293,6 +320,7 @@ class UsuarioService(private val userRepository: UserRepository,
                 status = StatusUsuario.ATIVO
             )
             userRepository.salvar(newUser)
+            log.info("User (paciente) salvo no Supabase: $idUsuarioFirebase")
 
             val newPaciente = Paciente(
                 nomePaciente = dto.nome,
@@ -301,21 +329,22 @@ class UsuarioService(private val userRepository: UserRepository,
             )
             newPaciente.dataCadastro = Clock.System.now()
             val pacienteSalvo = pacienteRepository.salvar(newPaciente)
+            log.info("Perfil Paciente salvo no Supabase: ${pacienteSalvo.idPaciente}")
 
             return pacienteSalvo.toResponse(userRepository)
 
         } catch (e: Exception) {
-            println("ERRO DETALHADO AO SALVAR NO SUPABASE: ${e.message}")
+            log.error("ERRO DETALHADO AO SALVAR NO SUPABASE: ${e.message}", e)
             e.printStackTrace()
             try {
                 if (idUsuarioFirebase != null) {
                     userRepository.deletarPorId(idUsuarioFirebase)
-                    println("Rollback no Supabase User realizado para usuário: $idUsuarioFirebase")
+                    log.info("Rollback no Supabase User realizado para usuário: $idUsuarioFirebase")
                     firebaseAuth.deleteUser(idUsuarioFirebase)
-                    println("Rollback no Firebase realizado para usuário: $idUsuarioFirebase")
+                    log.info("Rollback no Firebase realizado para usuário: $idUsuarioFirebase")
                 }
             } catch (authError: Exception) {
-                println("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar usuário $idUsuarioFirebase do Firebase: ${authError.message}")
+                log.error("ERRO CRÍTICO DE ROLLBACK: Falha ao deletar usuário $idUsuarioFirebase do Firebase: ${authError.message}", authError)
             }
             throw ConflitoDeEstadoException("Falha ao salvar perfil local, registro desfeito. Tente novamente.")
         }
@@ -325,6 +354,7 @@ class UsuarioService(private val userRepository: UserRepository,
         userIdAlvo: String,
         usuarioLogado: User
     ) {
+        log.info("Admin ${usuarioLogado.idUsuario} reenviando convite para User: $userIdAlvo")
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas Super Admins podem reenviar convites.")
         }
@@ -374,6 +404,7 @@ class UsuarioService(private val userRepository: UserRepository,
         usuarioLogado: User,
         bloquearEmail: Boolean = false
     ) {
+        log.warn("Admin ${usuarioLogado.idUsuario} iniciando exclusão do User: $userIdAlvo. Bloquear email: $bloquearEmail")
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Somente SuperAdmins podem deletar usuários")
         }
@@ -393,7 +424,7 @@ class UsuarioService(private val userRepository: UserRepository,
             Role.PROFISSIONAL -> {
                 val perfil = profissionalRepository.buscarPorUserId(userAlvo.idUsuario)
                 if (perfil != null) {
-
+                    log.info("Processando exclusão do perfil Profissional ${perfil.idProfissional}")
                     val consultasFuturas = consultaRepository.buscarPorProfissionalId(perfil.idProfissional)
                         .filter {
                             it.statusConsulta == StatusConsulta.AGENDADA &&
@@ -404,6 +435,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     for (consulta in consultasFuturas) {
                         consulta.statusConsulta = StatusConsulta.CANCELADA
                         consultaRepository.atualizar(consulta)
+                        log.info("Consulta ${consulta.idConsulta} cancelada devido à exclusão do profissional.")
                         // TODO: Notificar PACIENTE (consulta.pacienteID) sobre o cancelamento
                     }
                     if (!perfil.isDeletado) {
@@ -416,14 +448,17 @@ class UsuarioService(private val userRepository: UserRepository,
             Role.RECEPCIONISTA -> {
                 val perfil = recepcionistaRepository.buscarPorUserId(userAlvo.idUsuario)
                 if (perfil != null && !perfil.isDeletado) {
+                    log.info("Processando exclusão do perfil Recepcionista ${perfil.idRecepcionista}")
                     perfil.isDeletado = true
                     perfil.status = StatusUsuario.INATIVO
                     recepcionistaRepository.atualizar(perfil)
+
                 }
             }
             Role.PACIENTE -> {
                 val perfil = pacienteRepository.buscarPorUserId(userAlvo.idUsuario)
                 if (perfil != null) {
+                    log.info("Processando exclusão do perfil Paciente ${perfil.idPaciente}")
                     val consultasFuturas = consultaRepository.buscarPorPacienteId(perfil.idPaciente)
                         .filter {
                             it.statusConsulta == StatusConsulta.AGENDADA || it.statusConsulta == StatusConsulta.PENDENTE
@@ -432,6 +467,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     for (consulta in consultasFuturas) {
                         consulta.statusConsulta = StatusConsulta.CANCELADA
                         consultaRepository.atualizar(consulta)
+                        log.info("Consulta ${consulta.idConsulta} cancelada devido à exclusão do paciente.")
 
                         if (consulta.dataHoraConsulta != null && consulta.profissionalID != null) {
                             val profissional = profissionalRepository.buscarPorId(consulta.profissionalID!!)
@@ -439,6 +475,7 @@ class UsuarioService(private val userRepository: UserRepository,
                                 val dataHoraLocal = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
                                 profissional.agenda.liberarHorario(dataHoraLocal, consulta.duracaoEmMinutos.minutes)
                                 profissionalRepository.atualizar(profissional)
+                                log.info("Horário liberado na agenda do Profissional ${profissional.idProfissional}")
                                 // TODO: Notificar PROFISSIONAL sobre o cancelamento
                             }
                         }
@@ -459,23 +496,27 @@ class UsuarioService(private val userRepository: UserRepository,
             userAlvo.isDeletado = true
             userAlvo.status = StatusUsuario.INATIVO
             userRepository.atualizar(userAlvo)
+            log.info("Soft delete aplicado ao User: ${userAlvo.idUsuario}")
         }
 
         if (userAlvo.role == Role.PACIENTE && bloquearEmail) {
             if (!emailOriginal.startsWith("deleted_")) {
                 emailBlocklistRepository.salvar(emailOriginal)
+                log.info("Email $emailOriginal adicionado à blocklist.")
             }
         }
 
         try {
             firebaseAuth.deleteUser(userIdAlvo)
+            log.info("Usuário $userIdAlvo deletado do Firebase Auth.")
         } catch (e: Exception) {
-            println("AVISO: Falha ao deletar usuário $userIdAlvo do Firebase Auth: ${e.message}")
+            log.warn("AVISO: Falha ao deletar usuário $userIdAlvo do Firebase Auth: ${e.message}")
         }
     }
 
     @OptIn(ExperimentalTime::class)
     suspend fun deletarMinhaConta(usuarioLogado: User) {
+        log.warn("Usuário ${usuarioLogado.idUsuario} iniciando auto-exclusão.")
 
         when (usuarioLogado.role) {
             Role.PACIENTE -> {}
@@ -493,6 +534,7 @@ class UsuarioService(private val userRepository: UserRepository,
         val perfil = pacienteRepository.buscarPorUserId(userId)
             ?: throw RecursoNaoEncontradoException("Perfil de Paciente não encontrado para exclusão.")
 
+        log.info("Processando auto-exclusão do perfil Paciente ${perfil.idPaciente}")
         val agora = Clock.System.now()
         val consultasFuturas = consultaRepository.buscarPorPacienteId(perfil.idPaciente)
             .filter {
@@ -502,6 +544,7 @@ class UsuarioService(private val userRepository: UserRepository,
         for (consulta in consultasFuturas) {
             consulta.statusConsulta = StatusConsulta.CANCELADA
             consultaRepository.atualizar(consulta)
+            log.info("Consulta ${consulta.idConsulta} cancelada devido à auto-exclusão.")
 
             if (consulta.dataHoraConsulta != null && consulta.profissionalID != null) {
                 val profissional = profissionalRepository.buscarPorId(consulta.profissionalID!!)
@@ -509,6 +552,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     val dataHoraLocal = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
                     profissional.agenda.liberarHorario(dataHoraLocal, consulta.duracaoEmMinutos.minutes)
                     profissionalRepository.atualizar(profissional)
+                    log.info("Horário liberado na agenda do Profissional ${profissional.idProfissional}")
                     // TODO: Notificar profissional sobre o cancelamento
                 }
             }
@@ -529,12 +573,14 @@ class UsuarioService(private val userRepository: UserRepository,
 
         try {
             firebaseAuth.deleteUser(userId)
+            log.info("Usuário $userId deletado do Firebase Auth (auto-exclusão).")
         } catch (e: Exception) {
-            println("AVISO: Falha ao deletar usuário $userId do Firebase Auth durante auto-exclusão: ${e.message}")
+            log.warn("AVISO: Falha ao deletar usuário $userId do Firebase Auth durante auto-exclusão: ${e.message}")
         }
     }
 
     suspend fun buscarMeuPerfil(usuarioLogado: User): MeuPerfilResponse {
+        log.debug("Buscando MeuPerfil para User: ${usuarioLogado.idUsuario}")
 
         var perfilPaciente: PacienteResponse? = null
         var perfilProfissional: ProfissionalResponse? = null
@@ -557,6 +603,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     ?: throw RecursoNaoEncontradoException("Perfil de Recepcionista não encontrado.")
             }
             Role.SUPER_ADMIN -> {
+                log.debug("User ${usuarioLogado.idUsuario} é SUPER_ADMIN, checando perfis linkados...")
                 perfilProfissional = profissionalRepository.buscarPorUserId(usuarioLogado.idUsuario)
                     ?.toResponse(userRepository, areaAtuacaoRepository)
 
@@ -568,6 +615,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     perfilPaciente = pacienteRepository.buscarPorUserId(usuarioLogado.idUsuario)
                         ?.toResponse(userRepository)
                 }
+                log.debug("Perfis encontrados: Prof? ${perfilProfissional != null}, Recep? ${perfilRecepcionista != null}, Pac? ${perfilPaciente != null}")
             }
         }
 
@@ -584,6 +632,7 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun atualizarMeuPerfil(usuarioLogado: User, dto: AtualizarMeuPerfilRequest): Any {
+        log.info("User ${usuarioLogado.idUsuario} atualizando o próprio perfil.")
 
         return when (usuarioLogado.role) {
             Role.PACIENTE -> {
@@ -640,19 +689,22 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun atualizarMinhaSenha(usuarioLogado: User, dto: AtualizarMinhaSenhaRequest) {
+        log.info("User ${usuarioLogado.idUsuario} atualizando a própria senha.")
         validarForcaDaSenha(dto.novaSenha)
 
         try {
             val request = UserRecord.UpdateRequest(usuarioLogado.idUsuario)
                 .setPassword(dto.novaSenha)
             firebaseAuth.updateUser(request)
+            log.info("Senha atualizada no Firebase para User: ${usuarioLogado.idUsuario}")
         } catch (e: Exception) {
-            e.printStackTrace()
+            log.error("Falha ao atualizar a senha no Firebase para User: ${usuarioLogado.idUsuario}", e)
             throw ConflitoDeEstadoException("Falha ao atualizar a senha no Firebase: ${e.message}")
         }
     }
 
     suspend fun linkarPerfilAUsuario(dto: LinkarPerfilRequest, usuarioLogado: User): Any {
+        log.info("Admin ${usuarioLogado.idUsuario} linkando perfil ${dto.role} ao User: ${dto.userId}")
 
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas Super Admins podem linkar perfis.")
@@ -698,6 +750,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     status = StatusUsuario.ATIVO
                 )
                 val perfilSalvo = profissionalRepository.salvar(novoProfissional)
+                log.info("Perfil Profissional ${perfilSalvo.idProfissional} linkado ao User ${userAlvo.idUsuario}")
                 return perfilSalvo.toResponse(userRepository, areaAtuacaoRepository)
             }
             Role.RECEPCIONISTA -> {
@@ -707,6 +760,7 @@ class UsuarioService(private val userRepository: UserRepository,
                     status = StatusUsuario.ATIVO
                 )
                 val perfilSalvo = recepcionistaRepository.salvar(novaRecepcionista)
+                log.info("Perfil Recepcionista ${perfilSalvo.idRecepcionista} linkado ao User ${userAlvo.idUsuario}")
                 return perfilSalvo.toResponse(userRepository)
             }
             else -> {
@@ -716,6 +770,7 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun transferirSuperAdmin(dto: TransferirAdminRequest, adminAntigo: User): MeuPerfilResponse {
+        log.warn("Transferência de SuperAdmin iniciada por ${adminAntigo.idUsuario} para ${dto.novoEmail}. Excluir antigo: ${dto.excluirContaAntiga}")
         if (!adminAntigo.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas um Super Admin pode transferir a propriedade.")
         }
@@ -735,7 +790,7 @@ class UsuarioService(private val userRepository: UserRepository,
             userRepository.atualizar(adminNovo)
             novoUser = adminNovo
 
-            println("Propriedade de SuperAdmin transferida para o usuário existente: ${adminNovo.idUsuario}")
+            log.info("Propriedade de SuperAdmin transferida para o usuário existente: ${adminNovo.idUsuario}")
 
         } else {
             val token = UUID.randomUUID().toString()
@@ -749,6 +804,7 @@ class UsuarioService(private val userRepository: UserRepository,
                 val authUser = firebaseAuth.createUser(request)
                 idUsuarioFirebase = authUser.uid
             } catch (e: Exception) {
+                log.error("Falha ao criar usuário SuperAdmin no Firebase: ${dto.novoEmail}", e)
                 throw ConflitoDeEstadoException("Falha ao criar usuário SuperAdmin no Firebase: ${e.message}")
             }
 
@@ -762,8 +818,8 @@ class UsuarioService(private val userRepository: UserRepository,
             )
             userRepository.salvar(novoUser)
 
-            println("Convite de SuperAdmin enviado para o novo usuário: ${novoUser.idUsuario}")
             //TODO"Disparar e-mail de convite para SuperAdmin (com link usando o 'token') para ${dto.novoEmail}"
+            log.info("Convite de SuperAdmin enviado para o novo usuário: ${novoUser.idUsuario}")
         }
 
         processarContaAntiga(adminAntigo, dto.excluirContaAntiga)
@@ -774,7 +830,7 @@ class UsuarioService(private val userRepository: UserRepository,
     @OptIn(ExperimentalTime::class)
     private suspend fun processarContaAntiga(adminAntigo: User, excluir: Boolean) {
         if (excluir) {
-            // Se o admin antigo também era um Profissional, cancele suas consultas
+            log.warn("Excluindo conta do SuperAdmin anterior: ${adminAntigo.idUsuario}")
             if (adminAntigo.role == Role.PROFISSIONAL) {
                 val perfilProfissional = profissionalRepository.buscarPorUserId(adminAntigo.idUsuario)
                 if (perfilProfissional != null) {
@@ -791,8 +847,8 @@ class UsuarioService(private val userRepository: UserRepository,
                     for (consulta in consultasFuturas) {
                         consulta.statusConsulta = StatusConsulta.CANCELADA
                         consultaRepository.atualizar(consulta)
+                        log.info("Consulta ${consulta.idConsulta} cancelada devido à transferência de SuperAdmin.")
                         // TODO: Disparar e-mail para o paciente (consulta.pacienteID) avisando do cancelamento.
-                        println("Consulta ${consulta.idConsulta} cancelada.")
                     }
                 }
             }
@@ -800,6 +856,7 @@ class UsuarioService(private val userRepository: UserRepository,
             deletarUsuario(adminAntigo.idUsuario, adminAntigo, bloquearEmail = false)
 
         } else {
+            log.info("Removendo privilégio de SuperAdmin do usuário anterior: ${adminAntigo.idUsuario}")
             adminAntigo.isSuperAdmin = false
             userRepository.atualizar(adminAntigo)
         }
@@ -809,6 +866,7 @@ class UsuarioService(private val userRepository: UserRepository,
         emailAlvo: String,
         usuarioLogado: User
     ) {
+        log.warn("Admin ${usuarioLogado.idUsuario} desbloqueando email: $emailAlvo")
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas Super Admins podem desbloquear emails.")
         }
@@ -816,6 +874,7 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun listarEmailsBloqueados(usuarioLogado: User): List<String> {
+        log.info("Admin ${usuarioLogado.idUsuario} listando emails bloqueados.")
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas Super Admins podem ver a lista de emails bloqueados.")
         }
@@ -823,6 +882,7 @@ class UsuarioService(private val userRepository: UserRepository,
     }
 
     suspend fun listarPacientes(usuarioLogado: User): List<PacienteResponse> {
+        log.info("Staff ${usuarioLogado.idUsuario} listando todos os pacientes.")
         if (!usuarioLogado.isSuperAdmin && usuarioLogado.role != Role.RECEPCIONISTA) {
             throw NaoAutorizadoException("Apenas Admins ou Recepcionistas podem listar todos os pacientes.")
         }
@@ -840,6 +900,7 @@ class UsuarioService(private val userRepository: UserRepository,
         novoStatus: StatusUsuario,
         usuarioLogado: User
     ) {
+        log.info("Admin ${usuarioLogado.idUsuario} atualizando status de $userIdAlvo para $novoStatus")
         if (!usuarioLogado.isSuperAdmin) {
             throw NaoAutorizadoException("Apenas Super Admins podem alterar o status de membros da equipe.")
         }
@@ -862,6 +923,7 @@ class UsuarioService(private val userRepository: UserRepository,
             val perfil = profissionalRepository.buscarPorUserId(userAlvo.idUsuario)
                 ?: throw RecursoNaoEncontradoException("Perfil profissional não encontrado para este usuário.")
 
+            log.warn("Profissional ${perfil.idProfissional} sendo INATIVADO. Cancelando consultas futuras...")
             val agora = Clock.System.now()
             val consultasFuturas = consultaRepository.buscarPorProfissionalId(perfil.idProfissional)
                 .filter {
@@ -877,8 +939,8 @@ class UsuarioService(private val userRepository: UserRepository,
                 val dataHoraLocal = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
                 perfil.agenda.liberarHorario(dataHoraLocal, consulta.duracaoEmMinutos.minutes)
 
+                log.info("Consulta ${consulta.idConsulta} cancelada devido à inativação do profissional.")
                 // TODO: Notificar PACIENTE (consulta.pacienteID) sobre o cancelamento
-                println("Consulta ${consulta.idConsulta} cancelada devido à inativação do profissional.")
             }
             profissionalRepository.atualizar(perfil)
         }
@@ -911,9 +973,11 @@ class UsuarioService(private val userRepository: UserRepository,
 
     @OptIn(ExperimentalTime::class)
     suspend fun obterOuCriarPerfilSocial(principal: FirebasePrincipal): MeuPerfilResponse {
+        log.info("Processando login social para UID: ${principal.uid}, Email: ${principal.email}")
 
         val usuarioExistente = userRepository.buscarPorId(principal.uid)
         if (usuarioExistente != null) {
+            log.info("Usuário social já existente encontrado no DB local. Retornando perfil.")
             return buscarMeuPerfil(usuarioExistente)
         }
 
@@ -928,10 +992,12 @@ class UsuarioService(private val userRepository: UserRepository,
         }
 
         if (userRepository.buscarPorEmail(email) != null) {
+            log.warn("Login social falhou: Email $email já existe com UID diferente.")
             throw ConflitoDeEstadoException("Este email já está associado a uma conta local, mas o UID não corresponde.")
         }
 
         try {
+            log.info("Criando novo usuário local para login social: $email")
             val newUser = User(
                 idUsuario = principal.uid,
                 email = email,
@@ -952,7 +1018,7 @@ class UsuarioService(private val userRepository: UserRepository,
             return buscarMeuPerfil(usuarioSalvo)
 
         } catch (e: Exception) {
-            e.printStackTrace()
+            log.error("Falha ao salvar perfil local para o usuário social: ${e.message}", e)
             throw ConflitoDeEstadoException("Falha ao salvar perfil local para o usuário social: ${e.message}")
         }
     }

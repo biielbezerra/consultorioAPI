@@ -9,19 +9,23 @@ import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.time.ExperimentalTime
+import org.slf4j.LoggerFactory
 
 class SupabaseConsultaRepository : ConsultaRepository {
 
+    private val log = LoggerFactory.getLogger(javaClass)
     private val client = SupabaseConfig.client
     private val table = client.postgrest["Consulta"]
 
     override suspend fun salvar(consulta: Consulta): Consulta {
+        log.debug("Salvando Consulta: ${consulta.idConsulta}")
         return table.upsert(consulta) {
             select()
         }.decodeSingle()
     }
 
     override suspend fun atualizar(consulta: Consulta): Consulta {
+        log.debug("Atualizando Consulta: ${consulta.idConsulta}")
         return table.update(
             value = consulta
         ) {
@@ -33,6 +37,7 @@ class SupabaseConsultaRepository : ConsultaRepository {
     }
 
     override suspend fun buscarPorId(id: String): Consulta? {
+        log.debug("Buscando Consulta por idConsulta: $id")
         return try {
             val response = table.select {
                 filter {
@@ -42,13 +47,13 @@ class SupabaseConsultaRepository : ConsultaRepository {
             }
             response.decodeList<Consulta>().firstOrNull()
         } catch (e: Exception) {
-            println("DEBUG [ConsultaRepo] - FALHA NA DECODIFICAÇÃO: ${e.message}")
-            e.printStackTrace()
+            log.error("FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}", e)
             null
         }
     }
 
     override suspend fun buscarPorPacienteId(pacienteId: String): List<Consulta> {
+        log.debug("Buscando Consultas por pacienteId: $pacienteId")
         return table.select {
             filter {
                 eq("pacienteID", pacienteId)
@@ -58,6 +63,7 @@ class SupabaseConsultaRepository : ConsultaRepository {
     }
 
     override suspend fun buscarPorProfissionalId(profissionalId: String): List<Consulta> {
+        log.debug("Buscando Consultas por profissionalID: $profissionalId")
         return table.select {
             filter {
                 eq("profissionalID", profissionalId)
@@ -68,6 +74,7 @@ class SupabaseConsultaRepository : ConsultaRepository {
 
     @OptIn(ExperimentalTime::class)
     override suspend fun buscarPorIntervaloDeDatas(inicio: LocalDateTime, fim: LocalDateTime): List<Consulta> {
+        log.debug("Buscando Consultas por intervalo: $inicio até $fim")
         val inicioInstant = inicio.toInstant(fusoHorarioPadrao)
         val fimInstant = fim.toInstant(fusoHorarioPadrao)
 
@@ -81,6 +88,7 @@ class SupabaseConsultaRepository : ConsultaRepository {
     }
 
     override suspend fun deletarPorId(id: String) {
+        log.debug("Deletando Consulta: $id")
         table.delete { filter { eq("idConsulta", id) } }
     }
 }

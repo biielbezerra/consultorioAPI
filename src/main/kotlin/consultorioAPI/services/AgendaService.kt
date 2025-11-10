@@ -17,9 +17,12 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import org.slf4j.LoggerFactory
 
 class AgendaService(private val profissionalRepository: ProfissionalRepository,
                     private val consultaRepository: ConsultaRepository){
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     suspend fun gerarDisponibilidadePadrao(
         agenda: Agenda,
@@ -28,12 +31,14 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         dataFim: LocalDate,
         tamanhoSlot: Duration = 30.minutes
     ){
+        log.debug("Gerando disponibilidade padrão de $dataInicio até $dataFim")
         var dataAtual = dataInicio
 
         while (dataAtual <= dataFim){
             val blocosDeTrabalhoDoDia = regras.filter { it.diaDaSemana == dataAtual.dayOfWeek }
 
             blocosDeTrabalhoDoDia.forEach { bloco ->
+                log.trace("Aplicando regra para $dataAtual: ${bloco.horarioInicio}-${bloco.horarioFim} no Consultório ${bloco.consultorioId}")
                 val inicioDoBloco: LocalDateTime = dataAtual.atTime(bloco.horarioInicio)
                 val fimDoBloco: LocalDateTime = dataAtual.atTime(bloco.horarioFim)
 
@@ -50,6 +55,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         fim: LocalDateTime,
         tamanhoSlot: Duration = 30.minutes
     ) {
+        log.debug("Definindo horários disponíveis de $inicio até $fim")
         var atual = inicio
 
         while(atual < fim){
@@ -68,6 +74,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         fim: LocalDateTime,
         tamanhoSlot: Duration = 30.minutes
     ) {
+        log.debug("Removendo horários de $inicio até $fim para Prof $profissionalId")
 
         val inicioInstant = inicio.toInstant(fusoHorarioPadrao)
         val fimInstant = fim.toInstant(fusoHorarioPadrao)
@@ -82,6 +89,9 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
             val consultaFim = consulta.horarioFim()!!
 
             val haSobreposicao = inicioInstant < consultaFim && fimInstant > consultaInicio
+            if(haSobreposicao) {
+                log.warn("Bloqueio de $inicio-$fim falhou. Conflito com Consulta ${consulta.idConsulta}")
+            }
             haSobreposicao
         }
 
@@ -94,9 +104,11 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
             agenda.horariosDisponiveis.remove(horarioAtual)
             horarioAtual = horarioAtual.toInstant(fusoHorarioPadrao).plus(tamanhoSlot).toLocalDateTime(fusoHorarioPadrao)
         }
+        log.debug("Horários removidos com sucesso.")
     }
 
     suspend fun definirDiaDeFolga(profissional: Profissional, diaDeFolga: LocalDate, usuarioLogado: User) {
+        log.info("User ${usuarioLogado.idUsuario} definindo folga em $diaDeFolga para Prof ${profissional.idProfissional}")
 
         when (usuarioLogado.role) {
             Role.SUPER_ADMIN, Role.RECEPCIONISTA -> {}
@@ -115,6 +127,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         val blocosDeTrabalhoDoDia = profissional.diasDeTrabalho.filter { it.diaDaSemana == diaDeFolga.dayOfWeek }
 
         if (blocosDeTrabalhoDoDia.isEmpty()) {
+            log.info("Prof ${profissional.idProfissional} já não trabalha em $diaDeFolga. Nenhuma ação tomada.")
             return
         }
 
@@ -123,6 +136,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
             val fimDoBloco: LocalDateTime = diaDeFolga.atTime(bloco.horarioFim)
             removerHorariosIntervalo(profissional.idProfissional, profissional.agenda, inicioDoBloco, fimDoBloco)
         }
+        log.info("Horários de folga removidos da agenda do Prof ${profissional.idProfissional} para $diaDeFolga")
     }
 
     @OptIn(ExperimentalTime::class)
@@ -130,6 +144,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
         profissional: Profissional,
         consultorioId: String
     ): List<LocalDateTime> {
+        log.debug("Listando horários para Prof ${profissional.idProfissional} filtrando por Consultório $consultorioId")
 
         val duracao = profissional.duracaoPadraoMinutos.minutes
 
@@ -147,6 +162,7 @@ class AgendaService(private val profissionalRepository: ProfissionalRepository,
     }
 
     fun listarHorariosDisponiveis(profissional: Profissional): List<LocalDateTime> {
+        log.debug("Listando todos horários disponíveis para Prof ${profissional.idProfissional}")
         val agenda = profissional.agenda
         val duracao = profissional.duracaoPadraoMinutos.minutes
 
@@ -166,6 +182,7 @@ enum class StatusSlot { DISPONIVEL, OCUPADO, PASSADO, FORA_DO_HORARIO_DE_TRABALH
         dataInicio: LocalDate,
         dataFim: LocalDate
     ): Map<LocalDateTime, StatusSlot> {
+        log.debug("Obtendo status da agenda para Prof ${profissional.idProfissional} de $dataInicio até $dataFim")
         val statusMap = mutableMapOf<LocalDateTime, StatusSlot>()
         var dataAtual = dataInicio
         val agora: Instant = Clock.System.now()

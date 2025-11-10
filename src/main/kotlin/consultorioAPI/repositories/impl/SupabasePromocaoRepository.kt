@@ -9,17 +9,21 @@ import io.github.jan.supabase.postgrest.query.*
 import io.github.jan.supabase.postgrest.result.*
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import org.slf4j.LoggerFactory
 
 class SupabasePromocaoRepository : PromocaoRepository {
 
+    private val log = LoggerFactory.getLogger(javaClass)
     private val client = SupabaseConfig.client
     private val table = client.postgrest["Promocao"]
 
     override suspend fun salvar(promocao: Promocao): Promocao {
+        log.debug("Salvando Promocao: ${promocao.idPromocao}")
         return table.upsert(promocao) { select() }.decodeSingle()
     }
 
     override suspend fun atualizar(promocao: Promocao): Promocao {
+        log.debug("Atualizando Promocao: ${promocao.idPromocao}")
         return table.update(promocao) {
             select()
             filter { eq("idPromocao", promocao.idPromocao) }
@@ -27,6 +31,7 @@ class SupabasePromocaoRepository : PromocaoRepository {
     }
 
     override suspend fun buscarPorId(id: String, incluirDeletados: Boolean): Promocao? {
+        log.debug("Buscando Promocao por idPromocao: $id")
         return try {
             val response = table.select {
                 filter {
@@ -37,13 +42,13 @@ class SupabasePromocaoRepository : PromocaoRepository {
             }
             response.decodeList<Promocao>().firstOrNull()
         } catch (e: Exception) {
-            println("DEBUG [PromocaoRepo] - FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}")
-            e.printStackTrace()
+            log.error("FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}", e)
             null
         }
     }
 
     override suspend fun listarTodas(incluirDeletados: Boolean): List<Promocao> {
+        log.debug("Listando todas as promoções")
         return table.select {
             if (!incluirDeletados) { filter { eq("isDeletado", false) } }
         }.decodeList()
@@ -52,6 +57,7 @@ class SupabasePromocaoRepository : PromocaoRepository {
 
     @OptIn(ExperimentalTime::class)
     override suspend fun buscarAtivasPorData(data: Instant): List<Promocao> {
+        log.debug("Buscando promoções ativas por data: $data")
         return table.select {
             filter {
                 eq("isAtiva", true)
@@ -64,6 +70,7 @@ class SupabasePromocaoRepository : PromocaoRepository {
 
     @OptIn(ExperimentalTime::class)
     override suspend fun buscarAtivasPorCodigo(codigo: String, data: Instant): Promocao? {
+        log.debug("Buscando promoção ativa por código: $codigo")
         return try {
             val response = table.select {
                 filter {
@@ -86,6 +93,7 @@ class SupabasePromocaoRepository : PromocaoRepository {
 
     @OptIn(ExperimentalTime::class)
     override suspend fun buscarAtivasPorTipo(tipo: TipoPromocao, data: Instant): List<Promocao> {
+        log.debug("Buscando promoções ativas por tipo: $tipo")
         return table.select {
             filter {
                 eq("isAtiva", true)

@@ -18,6 +18,7 @@ import io.ktor.server.response.*
 import kotlinx.datetime.LocalDate
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
+import org.slf4j.LoggerFactory
 
 class ProfissionalController(
     private val profissionalService: ProfissionalService,

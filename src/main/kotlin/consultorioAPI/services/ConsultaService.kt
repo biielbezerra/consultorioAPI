@@ -20,6 +20,7 @@ import kotlin.time.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
+import org.slf4j.LoggerFactory
 
 class ConsultaService(
     private val pacienteService: PacienteService,
@@ -29,6 +30,8 @@ class ConsultaService(
     private val promocaoService: PromocaoService
 ) {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     @OptIn(ExperimentalTime::class)
     suspend fun reagendarConsulta(
         consulta: Consulta,
@@ -37,6 +40,7 @@ class ConsultaService(
         novaData: LocalDateTime,
         usuarioLogado: User
     ) {
+        log.info("Iniciando reagendamento da Consulta ${consulta.idConsulta} para $novaData por User ${usuarioLogado.idUsuario}")
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = true)
 
         if (consulta.statusConsulta != StatusConsulta.AGENDADA && consulta.statusConsulta != StatusConsulta.PENDENTE) {
@@ -50,6 +54,7 @@ class ConsultaService(
         val isPacienteDisponivel = pacienteService.isPacienteDisponivel(paciente, novaData, duracaoConsulta)
 
         if (!isProfissionalDisponivel || !isPacienteDisponivel) {
+            log.warn("Falha no reagendamento ${consulta.idConsulta}: Horário indisponível. Prof: $isProfissionalDisponivel, Pac: $isPacienteDisponivel")
             throw ConflitoDeEstadoException("Operação falhou. O horário solicitado não está disponível.")
         }
 
@@ -58,6 +63,7 @@ class ConsultaService(
         if (!isAgendamentoNovo && consulta.dataHoraConsulta != null) {
             val dataHoraLocalAntiga = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
             profissional.agenda.liberarHorario(dataHoraLocalAntiga, duracaoConsulta)
+            log.debug("Horário antigo ${dataHoraLocalAntiga} liberado da agenda do Prof ${profissional.idProfissional}")
         }
 
         var promocoesFinais = consulta.promocoesAplicadasIds
@@ -73,6 +79,7 @@ class ConsultaService(
         }
 
         if (!isPromocaoTravada) {
+            log.debug("Recalculando promoções para reagendamento da Consulta ${consulta.idConsulta}")
             val codigoOriginal = promocoesOriginais
                 .firstOrNull { it.tipoPromocao == TipoPromocao.CODIGO }?.codigoOpcional
 
@@ -99,19 +106,24 @@ class ConsultaService(
 
         val dataHoraLocalNova = consultaReagendada.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
         profissional.agenda.bloquearHorario(dataHoraLocalNova, consultaReagendada)
+        log.debug("Horário novo ${dataHoraLocalNova} bloqueado na agenda do Prof ${profissional.idProfissional}")
 
         try {
             consultaRepository.atualizar(consultaReagendada)
+            log.info("Consulta ${consultaReagendada.idConsulta} atualizada (reagendada) no banco.")
 
             try {
                 profissionalRepository.atualizar(profissional)
+                log.info("Agenda do Prof ${profissional.idProfissional} atualizada no banco.")
             } catch (eAgenda: Exception) {
-                println("ERRO ao salvar agenda, iniciando rollback da consulta: ${eAgenda.message}")
+                log.error("ERRO ao salvar agenda do Prof ${profissional.idProfissional}, iniciando rollback da consulta ${consultaReagendada.idConsulta}", eAgenda)
                 consultaRepository.atualizar(consultaOriginal)
+                log.warn("ROLLBACK: Consulta ${consultaOriginal.idConsulta} revertida ao estado original.")
                 throw ConflitoDeEstadoException("Falha ao atualizar a agenda do profissional. A consulta foi revertida ao estado original.")
             }
 
         } catch (eConsulta: Exception) {
+            log.error("Falha ao salvar o reagendamento da consulta ${consultaReagendada.idConsulta}", eConsulta)
             throw ConflitoDeEstadoException("Falha ao salvar o reagendamento da consulta: ${eConsulta.message}")
         }
     }
@@ -123,6 +135,7 @@ class ConsultaService(
         profissional: Profissional,
         usuarioLogado: User
     ) {
+        log.info("Iniciando cancelamento da Consulta ${consulta.idConsulta} por User ${usuarioLogado.idUsuario}")
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = true)
 
         if (consulta.statusConsulta == StatusConsulta.REALIZADA || consulta.statusConsulta == StatusConsulta.CANCELADA) {
@@ -135,6 +148,7 @@ class ConsultaService(
             val dataHoraLocal = consulta.dataHoraConsulta!!.toLocalDateTime(fusoHorarioPadrao)
             profissional.agenda.liberarHorario(dataHoraLocal, duracaoDaConsulta)
             agendaFoiModificada = true
+            log.debug("Horário ${dataHoraLocal} liberado da agenda do Prof ${profissional.idProfissional}")
         }
 
         val consultaCancelada = consulta.copy(statusConsulta = StatusConsulta.CANCELADA)
@@ -143,8 +157,11 @@ class ConsultaService(
             consultaRepository.atualizar(consultaCancelada)
             if (agendaFoiModificada) {
                 profissionalRepository.atualizar(profissional)
+                log.info("Agenda do Prof ${profissional.idProfissional} atualizada (horário liberado).")
             }
+            log.info("Consulta ${consulta.idConsulta} atualizada para CANCELADA.")
         } catch (e: Exception) {
+            log.error("Falha ao salvar cancelamento da Consulta ${consulta.idConsulta}", e)
             throw ConflitoDeEstadoException("Falha ao salvar cancelamento: ${e.message}")
         }
     }
@@ -155,6 +172,7 @@ class ConsultaService(
         novoStatus: StatusConsulta,
         usuarioLogado: User
     ) {
+        log.info("Iniciando finalização da Consulta ${consulta.idConsulta} para status $novoStatus por User ${usuarioLogado.idUsuario}")
         checarPermissaoModificarConsulta(usuarioLogado, consulta, permitePaciente = false)
 
         if (novoStatus != StatusConsulta.REALIZADA && novoStatus != StatusConsulta.NAO_COMPARECEU) {
@@ -172,6 +190,7 @@ class ConsultaService(
 
         val consultaFinalizada = consulta.copy(statusConsulta = novoStatus)
         consultaRepository.atualizar(consultaFinalizada)
+        log.info("Consulta ${consulta.idConsulta} atualizada para $novoStatus.")
 
         val paciente = pacienteRepository.buscarPorId(
             consulta.pacienteID
@@ -192,6 +211,7 @@ class ConsultaService(
                 }
             }
             if (paciente.status == StatusUsuario.INATIVO) {
+                log.info("Paciente ${paciente.idPaciente} estava INATIVO, reativando após consulta realizada.")
                 paciente.status = StatusUsuario.ATIVO
                 pacienteRepository.atualizar(paciente)
             }
@@ -199,6 +219,7 @@ class ConsultaService(
     }
 
     suspend fun listarConsultasProfissional(profissionalIdAlvo: String, usuarioLogado: User): List<Consulta> {
+        log.debug("User ${usuarioLogado.idUsuario} (Role ${usuarioLogado.role}) listando consultas do Prof $profissionalIdAlvo")
 
         if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
         } else {
@@ -223,6 +244,7 @@ class ConsultaService(
     }
 
     suspend fun listarConsultasPaciente(pacienteIdAlvo: String, usuarioLogado: User): List<Consulta> {
+        log.debug("User ${usuarioLogado.idUsuario} (Role ${usuarioLogado.role}) listando consultas do Paciente $pacienteIdAlvo")
 
         if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) {
         } else {
@@ -252,6 +274,7 @@ class ConsultaService(
         consulta: Consulta,
         permitePaciente: Boolean
     ) {
+        log.debug("Checando permissão de modificação da Consulta ${consulta.idConsulta} por User ${usuarioLogado.idUsuario}")
 
         if (usuarioLogado.isSuperAdmin || usuarioLogado.role == Role.RECEPCIONISTA) return
 

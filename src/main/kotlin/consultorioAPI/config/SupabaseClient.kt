@@ -9,6 +9,7 @@ import io.github.jan.supabase.serializer.KotlinXSerializer
 import io.ktor.client.engine.cio.CIO
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 
 val fusoHorarioPadrao = TimeZone.UTC
 

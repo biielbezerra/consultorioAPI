@@ -17,6 +17,7 @@ import consultorioAPI.services.UsuarioService
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import kotlin.time.ExperimentalTime
+import org.slf4j.LoggerFactory
 
 @OptIn(ExperimentalTime::class)
 class AdminController(

@@ -4,19 +4,23 @@ import com.consultorioAPI.config.SupabaseConfig
 import com.consultorioAPI.models.Paciente
 import com.consultorioAPI.repositories.PacienteRepository
 import io.github.jan.supabase.postgrest.postgrest
+import org.slf4j.LoggerFactory
 
 class SupabasePacienteRepository : PacienteRepository {
 
+    private val log = LoggerFactory.getLogger(javaClass)
     private val client = SupabaseConfig.client
     private val table = client.postgrest["Paciente"]
 
     override suspend fun salvar(paciente: Paciente): Paciente {
+        log.debug("Salvando Paciente: ${paciente.idPaciente} para User: ${paciente.userId}")
         return table.upsert(paciente) {
             select()
         }.decodeSingle()
     }
 
     override suspend fun atualizar(paciente: Paciente): Paciente {
+        log.debug("Atualizando Paciente: ${paciente.idPaciente}")
         return table.update(
             value = paciente
         ) {
@@ -28,6 +32,7 @@ class SupabasePacienteRepository : PacienteRepository {
     }
 
     override suspend fun buscarPorId(id: String): Paciente? {
+        log.debug("Buscando Paciente por idPaciente: $id")
         return try {
             val response = table.select {
                 filter {
@@ -38,13 +43,13 @@ class SupabasePacienteRepository : PacienteRepository {
             }
             response.decodeList<Paciente>().firstOrNull()
         } catch (e: Exception) {
-            println("DEBUG [PacienteRepo] - FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}")
-            e.printStackTrace()
+            log.error("FALHA NA DECODIFICAÇÃO (buscarPorId): ${e.message}", e)
             null
         }
     }
 
     override suspend fun buscarPorNome(nome: String): List<Paciente> {
+        log.debug("Buscando Paciente por nome: $nome")
         return table.select {
             filter {
                 ilike("nomePaciente", "%${nome}%")
@@ -54,6 +59,7 @@ class SupabasePacienteRepository : PacienteRepository {
     }
 
     override suspend fun buscarPorUserId(userId: String): Paciente? {
+        log.debug("Buscando Paciente por userId: $userId")
         return try {
             val response = table.select {
                 filter {
@@ -64,13 +70,14 @@ class SupabasePacienteRepository : PacienteRepository {
             }
             response.decodeList<Paciente>().firstOrNull()
         } catch (e: Exception) {
-            println("DEBUG [PacienteRepo] - FALHA NA DECODIFICAÇÃO (buscarPorUserId): ${e.message}")
+            log.error("FALHA NA DECODIFICAÇÃO (buscarPorUserId): ${e.message}", e) // ⬅️ MUDOU
             e.printStackTrace()
             null
         }
     }
 
     override suspend fun listarTodos(): List<Paciente> {
+        log.debug("Listando todos os pacientes")
         return table.select {
             filter {
                 eq("isDeletado", false)
@@ -79,6 +86,7 @@ class SupabasePacienteRepository : PacienteRepository {
     }
 
     override suspend fun deletarPorId(id: String) {
+        log.debug("Deletando Paciente: $id")
         table.delete {
             filter {
                 eq("idPaciente", id)

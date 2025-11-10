@@ -15,6 +15,7 @@ import io.ktor.server.response.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.slf4j.LoggerFactory
 
 class ConsultaController(
     private val consultorioService: ConsultorioService,
