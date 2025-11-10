@@ -41,11 +41,21 @@ Para rodar este projeto localmente, siga estes passos:
     cd consultorioAPI
     ```
 
-2.  **Crie o arquivo `.env`:**
-    Na raiz do projeto, crie um arquivo chamado `.env`. Este arquivo é **obrigatório** para carregar as chaves da API.
+2.  **Obtenha sua Chave de Serviço do Firebase:**
+    * Vá ao **Firebase Console** ➡️ Configurações do Projeto ➡️ Contas de Serviço.
+    * Clique em **"Gerar nova chave privada"**.
+    * Isso fará o download de um arquivo `...json`. **Renomeie** este arquivo para `firebase-service-account.json`.
 
-3.  **Adicione as variáveis de ambiente:**
-    Copie e cole o seguinte conteúdo no seu `.env` e substitua pelos seus valores reais:
+3.  **Coloque a Chave de Serviço no Projeto:**
+    * Mova o arquivo `firebase-service-account.json` que você acabou de baixar para a pasta `src/main/resources/` do projeto.
+    * O caminho final deve ser `src/main/resources/firebase-service-account.json`.
+    * *(Este arquivo está no `.gitignore`, então é seguro. Ele não será enviado ao seu repositório).*
+
+4.  **Crie o arquivo `.env`:**
+    Na raiz do projeto, crie um arquivo chamado `.env`.
+
+5.  **Adicione as variáveis de ambiente:**
+    Copie e cole o seguinte conteúdo no seu `.env` e substitua pelos seus valores reais (o `FIREBASE_SERVICE_ACCOUNT_PATH` já deve estar correto):
 
     ```ini
     # Configuração do Supabase (Banco de Dados)
@@ -56,12 +66,11 @@ Para rodar este projeto localmente, siga estes passos:
     FIREBASE_PROJECT_ID=[SEU_PROJECT_ID_DO_FIREBASE]
     FIREBASE_SERVICE_ACCOUNT_PATH=src/main/resources/firebase-service-account.json
     ```
-    *Nota: O `FIREBASE_SERVICE_ACCOUNT_PATH` aponta para o arquivo JSON (`firebase-service-account.json`) que você baixou do Google Cloud/Firebase.*
 
-4.  **Rode a aplicação:**
+6.  **Rode a aplicação:**
     Execute a função `main` no arquivo `Application.kt` pela sua IDE (IntelliJ). A API estará disponível em `http://localhost:8080`.
 
-5.  **Acesse a Documentação (Swagger):**
+7.  **Acesse a Documentação (Swagger):**
     Com a API rodando, acesse `http://localhost:8080/swagger`. Esta é a documentação interativa e a **melhor forma de testar as rotas**.
 
 ---
